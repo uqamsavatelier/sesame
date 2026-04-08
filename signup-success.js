@@ -5,7 +5,7 @@ const $ = (id) => document.getElementById(id);
   document.body.dataset.theme = t;
 })();
 
-let remaining = 5;
+let remaining = 10;
 const countdownEl = $("countdownValue");
 
 const timer = setInterval(() => {

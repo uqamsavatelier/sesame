@@ -5,6 +5,7 @@ import {
   updateUserProfileRole,
   countOpenSuggestions,
   countOpenLoansByBorrower,
+  countPendingUsers,
 } from "./api.js";
 import {
   getAllAuditTypes,
@@ -106,6 +107,7 @@ const state = {
   profile: null,
   role: "new_user",
   suggestionCount: 0,
+  pendingUserCount: 0,
   myOpenLoanCount: 0,
   users: [],
   usersFilter: "",
@@ -328,6 +330,7 @@ function applyRoleBasedConfigView() {
   const tabs = $("configTabs");
   const tabRolesBtn = $("tabRolesBtn");
   const tabUsersBtn = $("tabUsersBtn");
+  const tabAuditBtn = $("tabAuditBtn");
 
   if (isSuperAdmin) {
     document.title = "Gestion clés - Configuration";
@@ -337,18 +340,34 @@ function applyRoleBasedConfigView() {
     if (tabs) tabs.style.display = "";
     if (tabRolesBtn) tabRolesBtn.style.display = "";
     if (tabUsersBtn) tabUsersBtn.style.display = "";
+    if (tabAuditBtn) tabAuditBtn.style.display = "";
     setActiveTab("roles");
     return;
   }
 
-  document.title = "Gestion clés - Journal d'audit";
-  if (topbarTitle) topbarTitle.textContent = "Journal d'audit";
-  if (pageCardTitle) pageCardTitle.textContent = "Journal d'audit";
-  if (pageSub) pageSub.textContent = "Consultation des événements";
-  if (tabs) tabs.style.display = "none";
+  document.title = "Gestion clés - Utilisateurs et audit";
+  if (topbarTitle) topbarTitle.textContent = "Utilisateurs et audit";
+  if (pageCardTitle) pageCardTitle.textContent = "Utilisateurs et audit";
+  if (pageSub) pageSub.textContent = "Gestion des comptes en attente et journal";
+  if (tabs) tabs.style.display = "";
   if (tabRolesBtn) tabRolesBtn.style.display = "none";
-  if (tabUsersBtn) tabUsersBtn.style.display = "none";
-  setActiveTab("audit");
+  if (tabUsersBtn) tabUsersBtn.style.display = "";
+  if (tabAuditBtn) tabAuditBtn.style.display = "";
+  setActiveTab("users");
+}
+
+function refreshPendingUsersUi() {
+  const usersTab = $("tabUsersBtn");
+  const notice = $("pendingUsersNotice");
+  const count = Number(state.pendingUserCount) || 0;
+  if (usersTab) {
+    usersTab.textContent = count > 0 ? `Utilisateurs (${count} en attente)` : "Utilisateurs";
+  }
+  if (notice) {
+    notice.textContent = count > 0
+      ? `${count} nouveau(x) compte(s) en attente. Ouvre l'onglet Utilisateurs pour attribuer un rôle.`
+      : "";
+  }
 }
 
 function renderRoleMatrix() {
@@ -468,6 +487,11 @@ function renderUsers() {
     if (!q) return true;
     const hay = `${u.display_name ?? ""} ${u.id ?? ""} ${normalizeRole(u.role)}`.toLowerCase();
     return hay.includes(q);
+  }).sort((a, b) => {
+    const aPending = normalizeRole(a.role) === "new_user" ? 0 : 1;
+    const bPending = normalizeRole(b.role) === "new_user" ? 0 : 1;
+    if (aPending !== bPending) return aPending - bPending;
+    return String(a.display_name ?? "").localeCompare(String(b.display_name ?? ""), "fr-CA");
   });
   $("usersTableBody").innerHTML = users.map((u) => {
     const currentRole = normalizeRole(u.role);
@@ -492,6 +516,8 @@ function renderUsers() {
 
 async function loadUsers() {
   state.users = await listUserProfiles();
+  state.pendingUserCount = state.users.filter((u) => normalizeRole(u.role) === "new_user").length;
+  refreshPendingUsersUi();
   renderUsers();
 }
 
@@ -885,6 +911,8 @@ async function updateUserRole(userId, nextRole) {
 
   const updated = await updateUserProfileRole(userId, targetRole);
   row.role = normalizeRole(updated?.role ?? targetRole);
+  state.pendingUserCount = state.users.filter((u) => normalizeRole(u.role) === "new_user").length;
+  refreshPendingUsersUi();
 }
 
 
@@ -1073,8 +1101,15 @@ async function boot() {
     if (badge) badge.hidden = true;
   }
 
+  try {
+    state.pendingUserCount = await countPendingUsers();
+  } catch {
+    state.pendingUserCount = 0;
+  }
+
   renderNav();
   applyRoleBasedConfigView();
+  refreshPendingUsersUi();
   state.auditGroups = computeAuditGroups();
   state.auditSelectedGroups = new Set(state.auditGroups.map((g) => g.id));
   renderAuditTypeFilters();
@@ -1084,8 +1119,11 @@ async function boot() {
 
   $("configStatus").textContent = "Chargement...";
   const loadTasks = [loadAudit(), loadAuditArchives()];
+  if (isAdminRole(state.role)) {
+    loadTasks.unshift(loadUsers());
+  }
   if (state.role === "super_admin") {
-    loadTasks.unshift(loadRoleMatrix(), loadUsers());
+    loadTasks.unshift(loadRoleMatrix());
   }
   await Promise.all(loadTasks);
   $("configStatus").textContent = "";

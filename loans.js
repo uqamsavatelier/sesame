@@ -10,6 +10,7 @@ import {
   listMissingByKeyIds,
   fnLoanReturn,
   countOpenSuggestions,
+  countPendingUsers,
   countOpenLoansByBorrower,
 } from "./api.js";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks } from "./audit.js";
@@ -66,7 +67,7 @@ function buildNavLinks(role) {
       { label: "Clés", href: "./index.html" },
       { label: "Emprunts", href: "./loans.html" },
       { label: "Suggestions", href: "./suggestions.html", badge: Number(state.suggestionCount) || 0 },
-      { label: "Configuration", href: "./configuration.html" },
+      { label: "Configuration", href: "./configuration.html", badge: Number(state.pendingUserCount) || 0 },
       { label: "Déconnexion", action: "logout", danger: true },
     ];
   }
@@ -75,7 +76,7 @@ function buildNavLinks(role) {
       { label: "Clés", href: "./index.html" },
       { label: "Emprunts", href: "./loans.html" },
       { label: "Suggestions", href: "./suggestions.html", badge: Number(state.suggestionCount) || 0 },
-      { label: "Journal d'audit", href: "./configuration.html" },
+      { label: "Utilisateurs et audit", href: "./configuration.html", badge: Number(state.pendingUserCount) || 0 },
       { label: "Déconnexion", action: "logout", danger: true },
     ];
   }
@@ -205,6 +206,7 @@ const state = {
   missingRows: [],
   reportersById: new Map(),
   suggestionCount: 0,
+  pendingUserCount: 0,
   myOpenLoanCount: 0,
 };
 
@@ -264,6 +266,11 @@ async function loadData() {
     }
   } catch {
     state.suggestionCount = 0;
+  }
+  try {
+    state.pendingUserCount = isAdminRole(state.role) ? await countPendingUsers() : 0;
+  } catch {
+    state.pendingUserCount = 0;
   }
 
   renderNav(state.profile, state.role);

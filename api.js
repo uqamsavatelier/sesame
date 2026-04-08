@@ -389,6 +389,15 @@ export async function listUserProfiles() {
   return data ?? [];
 }
 
+export async function countPendingUsers() {
+  const { count, error } = await supa
+    .from("user_profiles")
+    .select("id", { count: "exact", head: true })
+    .eq("role", "new_user");
+  if (error) throw error;
+  return Number(count) || 0;
+}
+
 export async function updateUserProfileRole(userId, role) {
   const { data, error } = await supa
     .from("user_profiles")

@@ -23,6 +23,7 @@ import {
   getCabinetUsage,
   deleteCabinet,
   countOpenSuggestions,
+  countPendingUsers,
   countOpenLoansByBorrower
 } from "./api.js";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks, logAuditEvent } from "./audit.js";
@@ -250,8 +251,9 @@ function buildNavLinks(role) {
       { label: "Suggestions", href: "./suggestions.html", badge: Number(state.suggestionCount) || 0 },
     ];
     links.push({
-      label: normalizedRole === "super_admin" ? "Configuration" : "Journal d'audit",
+      label: normalizedRole === "super_admin" ? "Configuration" : "Utilisateurs et audit",
       href: "./configuration.html",
+      badge: Number(state.pendingUserCount) || 0,
     });
     links.push({ label: "Déconnexion", action: "logout", danger: true });
     return links;
@@ -685,6 +687,7 @@ let state = {
   },
   openTargetHandled: false,
   suggestionCount: 0,
+  pendingUserCount: 0,
   myOpenLoanCount: 0,
   cabinetEditModal: {
     open: false,
@@ -2019,6 +2022,11 @@ async function boot() {
       state.suggestionCount = 0;
       const badge = $("burgerBadge");
       if (badge) badge.hidden = true;
+    }
+    try {
+      state.pendingUserCount = await countPendingUsers();
+    } catch {
+      state.pendingUserCount = 0;
     }
   }
 
