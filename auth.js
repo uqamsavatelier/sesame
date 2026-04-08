@@ -103,6 +103,10 @@ export async function signOut() {
   window.location.href = "./login.html";
 }
 
+export async function signOutSilently() {
+  await supa.auth.signOut();
+}
+
 export async function getMyProfile() {
   const s = await getSession();
   if (!s?.user?.id) return null;

@@ -1498,13 +1498,6 @@ body.login-page #btnLogin:focus-visible{
   outline-offset: 2px;
   border-color: rgba(59,130,246,.72);
 }
-body.login-page .login-note{
-  margin-top: 12px;
-  text-align: center;
-  font-size: 13px;
-  line-height: 1.45;
-  color: #475569;
-}
 body.login-page .login-separator{
   display: flex;
   align-items: center;
@@ -1524,6 +1517,9 @@ body.login-page .login-separator::after{
 }
 body.login-page .login-signup-fields{
   margin-top: 10px;
+}
+body.login-page .login-signup-panel{
+  margin-top: 6px;
 }
 body.login-page .btn.login-secondary-btn{
   color: #0f172a;
@@ -1571,6 +1567,26 @@ body.waiting-page .waiting-panel strong{
 body.waiting-page .waiting-actions{
   gap: 10px;
   flex-wrap: wrap;
+}
+body.success-page .success-card{
+  width: min(560px, 100%);
+}
+body.success-page .success-title{
+  margin: 8px 0 0;
+  text-align: center;
+  font-size: clamp(24px, 3vw, 30px);
+  color: #0f172a;
+}
+body.success-page .success-text{
+  margin-top: 12px;
+  text-align: center;
+  line-height: 1.6;
+  color: #334155;
+}
+body.success-page .success-countdown{
+  margin-top: 18px;
+  text-align: center;
+  color: #475569;
 }
 
 body[data-theme="light"] .input,

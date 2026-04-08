@@ -1,10 +1,16 @@
-import { signIn, signUp, getSession, getMyProfile, redirectToRoleHome } from "./auth.js";
+import { signIn, signUp, getSession, getMyProfile, redirectToRoleHome, signOutSilently } from "./auth.js";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks } from "./audit.js";
 
 const $ = (id) => document.getElementById(id);
 const setMessage = (value) => {
   $("msg").textContent = value;
 };
+
+function setSignupPanelOpen(open) {
+  $("signupPanel").hidden = !open;
+  $("btnShowSignup").hidden = !!open;
+  if (open) $("signupDisplayName")?.focus();
+}
 
 (() => {
   ensureAuditSyncStarted();
@@ -53,22 +59,26 @@ async function doSignup() {
     const { data, error } = await signUp(displayName, email, password);
     if (error) throw error;
 
-    $("email").value = email;
-    $("signupPassword").value = "";
-
-    if (data?.session) {
-      await redirectCurrentUserHome();
-      return;
-    }
-
-    setMessage("Compte créé. Vérifie ton courriel, puis connecte-toi. L'accès sera débloqué par un administrateur.");
+    if (data?.session) await signOutSilently();
+    window.location.href = "./signup-success.html";
   } catch (e) {
     setMessage(e?.message ?? String(e));
   }
 }
 
 $("btnLogin").addEventListener("click", doLogin);
+$("btnShowSignup").addEventListener("click", () => {
+  setMessage("");
+  setSignupPanelOpen(true);
+});
 $("btnSignup").addEventListener("click", doSignup);
+$("btnCancelSignup").addEventListener("click", () => {
+  $("signupDisplayName").value = "";
+  $("signupEmail").value = "";
+  $("signupPassword").value = "";
+  setMessage("");
+  setSignupPanelOpen(false);
+});
 
 ["email", "password"].forEach((id) => {
   $(id).addEventListener("keydown", (event) => {

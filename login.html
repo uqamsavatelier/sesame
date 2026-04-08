@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Gestion des cl&eacute;s - Connexion</title>
-  <link rel="stylesheet" href="./style.css?v=20260408a" />
+  <link rel="stylesheet" href="./style.css?v=20260408b" />
 </head>
 <body class="login-page">
 
@@ -27,7 +27,7 @@
               <path d="M19.5 16.5 14.4 12.8"></path>
             </svg>
           </span>
-          <input id="email" class="input login-input" type="email" placeholder="Courriel" autocomplete="email" />
+          <input id="email" class="input login-input" type="email" placeholder="user" autocomplete="email" />
         </label>
 
         <label class="field-shell" for="password">
@@ -52,22 +52,23 @@
         <button id="btnLogin" class="btn login-btn">Se connecter</button>
       </div>
 
-      <div class="login-note">
-        Les nouveaux comptes sont placés en salle d'attente jusqu'à validation par un administrateur.
-      </div>
-
       <div class="login-separator" aria-hidden="true">
-        <span>CRÉER UN COMPTE</span>
+        <span>OU</span>
       </div>
 
-      <div class="login-fields login-signup-fields">
+      <div class="login-actions">
+        <button id="btnShowSignup" class="btn secondary login-secondary-btn">Créer un compte</button>
+      </div>
+
+      <section id="signupPanel" class="login-signup-panel" hidden>
+        <div class="login-fields login-signup-fields">
         <label class="field-shell" for="signupDisplayName">
           <span class="field-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" focusable="false">
               <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.1 0-7.5 2.2-7.5 4.8 0 .4.3.7.7.7h13.6c.4 0 .7-.3.7-.7C19.5 16.2 16.1 14 12 14Z"></path>
             </svg>
           </span>
-          <input id="signupDisplayName" class="input login-input" type="text" placeholder="Nom (Display Name)" autocomplete="name" />
+          <input id="signupDisplayName" class="input login-input" type="text" placeholder="Nom" autocomplete="name" />
         </label>
 
         <label class="field-shell" for="signupEmail">
@@ -98,11 +99,16 @@
             </svg>
           </button>
         </label>
-      </div>
+        </div>
 
-      <div class="login-actions">
-        <button id="btnSignup" class="btn secondary login-secondary-btn">Créer un compte</button>
-      </div>
+        <div class="login-actions">
+          <button id="btnSignup" class="btn login-btn">Créer un compte</button>
+        </div>
+
+        <div class="login-actions">
+          <button id="btnCancelSignup" class="btn secondary login-secondary-btn">Annuler</button>
+        </div>
+      </section>
 
       <div id="msg" class="muted login-msg" role="status" aria-live="polite"></div>
     </section>
@@ -110,7 +116,7 @@
 
   <div class="app-version">Version 2.9.6</div>
 
-  <script type="module" src="./login.js?v=20260408a"></script>
+  <script type="module" src="./login.js?v=20260408b"></script>
 </body>
 </html>
 
