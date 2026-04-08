@@ -1,6 +1,6 @@
 ﻿import { supa } from "./supabaseClient.js";
 
-import { requireSessionOrRedirect, getMyProfile, signOut } from "./auth.js";
+import { requireSessionOrRedirect, getMyProfile, signOut, isPendingApprovalRole, redirectToRoleHome } from "./auth.js";
 import { groupByHook, renderHookCard } from "./ui.js";
 import {
   listCabinets,
@@ -102,6 +102,7 @@ function roleLabel(role) {
   return r === "super_admin" ? "Super-admin"
     : r === "admin" ? "Administrateur"
     : r === "consultant" ? "Consultant"
+    : r === "new_user" ? "Salle d'attente"
     : "Utilisateur";
 }
 
@@ -112,8 +113,8 @@ function normalizeRole(role) {
     .replaceAll("-", "_")
     .replace(/\s+/g, "_");
   if (r === "super_admin" || r === "superadmin") return "super_admin";
-  if (r === "admin" || r === "consultant" || r === "user") return r;
-  return "user";
+  if (r === "admin" || r === "consultant" || r === "user" || r === "new_user") return r;
+  return "new_user";
 }
 
 function isAdminRole(role) {
@@ -167,6 +168,17 @@ const DEFAULT_ROLE_PERMISSIONS = {
     creation: false,
     suppression: false,
   },
+  new_user: {
+    consultation: false,
+    signalement: false,
+    suggestion: false,
+    emprunt: false,
+    retour: false,
+    edition: false,
+    deplacement: false,
+    creation: false,
+    suppression: false,
+  },
 };
 
 function defaultPermissionsForRole(role) {
@@ -174,7 +186,7 @@ function defaultPermissionsForRole(role) {
   if (r === "super_admin") {
     return Object.fromEntries(ROLE_ACTION_KEYS.map((k) => [k, true]));
   }
-  const base = DEFAULT_ROLE_PERMISSIONS[r] ?? DEFAULT_ROLE_PERMISSIONS.user;
+  const base = DEFAULT_ROLE_PERMISSIONS[r] ?? DEFAULT_ROLE_PERMISSIONS.new_user;
   return { ...base };
 }
 
@@ -243,6 +255,12 @@ function buildNavLinks(role) {
     });
     links.push({ label: "Déconnexion", action: "logout", danger: true });
     return links;
+  }
+  if (normalizedRole === "new_user") {
+    return [
+      { label: "Salle d'attente", href: "./waiting.html" },
+      { label: "Déconnexion", action: "logout", danger: true },
+    ];
   }
   if (normalizedRole === "consultant") {
     return [
@@ -601,7 +619,7 @@ function setStatus(msg) {
 
 const PAGE_SIZE = 50;
 let state = {
-  role: "user",
+  role: "new_user",
   profile: null,
   cabinets: [],
   cabinetId: null,
@@ -672,7 +690,7 @@ let state = {
     open: false,
     cabinetId: null,
   },
-  rolePermissions: defaultPermissionsForRole("user"),
+  rolePermissions: defaultPermissionsForRole("new_user"),
 };
 
 function getCabinetFromUrl() {
@@ -1970,7 +1988,11 @@ async function boot() {
 
 
   state.profile = await getMyProfile();
-  state.role = normalizeRole(state.profile?.role ?? "user");
+  state.role = normalizeRole(state.profile?.role ?? "new_user");
+  if (isPendingApprovalRole(state.role)) {
+    redirectToRoleHome(state.role);
+    return;
+  }
   state.rolePermissions = await loadRolePermissionsForCurrentRole();
 
   try {

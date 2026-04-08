@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Gestion des clés - Salle d'attente</title>
+  <link rel="stylesheet" href="./style.css?v=20260408a" />
+</head>
+<body class="login-page waiting-page">
+
+  <main class="container">
+    <section class="card login-card waiting-card">
+      <div class="login-sesame">
+        <img class="logo-dark" src="./ressources/sesame_logo_dark.png?v=20260216" alt="Sesame" />
+        <img class="logo-light" src="./ressources/sesame_logo_light.png?v=20260216" alt="Sesame" />
+      </div>
+
+      <div class="page-card-head">
+        <h1 class="h1">Salle d'attente</h1>
+      </div>
+
+      <h2 class="waiting-title" id="waitingTitle">En attente de l'administrateur</h2>
+      <div class="waiting-text">
+        Ton compte a bien été créé, mais il n'a pas encore reçu d'autorisations.
+        Un administrateur doit d'abord déterminer tes accès.
+      </div>
+
+      <div class="waiting-panel">
+        <div><strong>Compte:</strong> <span id="waitingName">-</span></div>
+        <div><strong>Courriel:</strong> <span id="waitingEmail">-</span></div>
+        <div class="muted" style="margin-top:8px;">Lorsque ton rôle sera mis à jour, clique sur "Rafraîchir".</div>
+      </div>
+
+      <div class="login-actions waiting-actions">
+        <button id="btnRefreshWaiting" class="btn login-btn">Rafraîchir</button>
+      </div>
+
+      <div class="login-actions waiting-actions">
+        <button id="btnSignOutWaiting" class="btn secondary login-secondary-btn">Déconnexion</button>
+      </div>
+
+      <div id="waitingMsg" class="muted login-msg" role="status" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <div class="app-version">Version 2.9.6</div>
+
+  <script type="module" src="./waiting.js?v=20260408a"></script>
+</body>
+</html>

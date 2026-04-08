@@ -1,4 +1,4 @@
-import { requireSessionOrRedirect, getMyProfile, signOut } from "./auth.js";
+import { requireSessionOrRedirect, getMyProfile, signOut, isPendingApprovalRole, redirectToRoleHome } from "./auth.js";
 import {
   listCabinets,
   listLoansAll,
@@ -41,8 +41,8 @@ function bindThemeToggle() {
 function normalizeRole(role) {
   const r = String(role ?? "").trim().toLowerCase().replaceAll("-", "_").replace(/\s+/g, "_");
   if (r === "super_admin" || r === "superadmin") return "super_admin";
-  if (r === "admin" || r === "consultant" || r === "user") return r;
-  return "user";
+  if (r === "admin" || r === "consultant" || r === "user" || r === "new_user") return r;
+  return "new_user";
 }
 
 function isAdminRole(role) {
@@ -55,6 +55,7 @@ function roleLabel(role) {
   return r === "super_admin" ? "Super-admin"
     : r === "admin" ? "Administrateur"
       : r === "consultant" ? "Consultant"
+        : r === "new_user" ? "Salle d'attente"
         : "Utilisateur";
 }
 
@@ -75,6 +76,12 @@ function buildNavLinks(role) {
       { label: "Emprunts", href: "./loans.html" },
       { label: "Suggestions", href: "./suggestions.html", badge: Number(state.suggestionCount) || 0 },
       { label: "Journal d'audit", href: "./configuration.html" },
+      { label: "Déconnexion", action: "logout", danger: true },
+    ];
+  }
+  if (normalizedRole === "new_user") {
+    return [
+      { label: "Salle d'attente", href: "./waiting.html" },
       { label: "Déconnexion", action: "logout", danger: true },
     ];
   }
@@ -187,7 +194,7 @@ function statusClass(l) {
 const state = {
   page: document.body.dataset.page || "loans",
   profile: null,
-  role: "user",
+  role: "new_user",
   activeTab: "mine",
   cabinets: [],
   loans: [],
@@ -233,9 +240,13 @@ async function loadData() {
   applyTheme();
   await requireSessionOrRedirect();
   state.profile = await getMyProfile();
-  state.role = normalizeRole(state.profile?.role ?? "user");
+  state.role = normalizeRole(state.profile?.role ?? "new_user");
+  if (isPendingApprovalRole(state.role)) {
+    redirectToRoleHome(state.role);
+    return;
+  }
   if (state.page === "loans" && !isAdminRole(state.role)) {
-    window.location.href = "./index.html";
+    redirectToRoleHome(state.role);
     return;
   }
 

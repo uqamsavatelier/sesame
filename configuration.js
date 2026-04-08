@@ -1,5 +1,5 @@
 ﻿import { supa } from "./supabaseClient.js";
-import { requireSessionOrRedirect, getMyProfile, signOut } from "./auth.js";
+import { requireSessionOrRedirect, getMyProfile, signOut, isPendingApprovalRole, redirectToRoleHome } from "./auth.js";
 import {
   listUserProfiles,
   updateUserProfileRole,
@@ -17,9 +17,9 @@ import {
 
 const $ = (id) => document.getElementById(id);
 
-const ROLE_OPTIONS = ["admin", "user", "consultant"];
+const ROLE_OPTIONS = ["new_user", "user", "consultant", "admin"];
 const KNOWN_ROLES = ["super_admin", ...ROLE_OPTIONS];
-const MATRIX_ROLES = ["admin", "user", "consultant"];
+const MATRIX_ROLES = ["new_user", "user", "consultant", "admin"];
 const MATRIX_ACTION_KEYS = [
   "consultation",
   "signalement",
@@ -52,6 +52,17 @@ const AUDIT_GROUPS_BASE = [
 ];
 
 const DEFAULT_MATRIX = {
+  new_user: {
+    consultation: false,
+    emprunt: false,
+    retour: false,
+    signalement: false,
+    suggestion: false,
+    edition: false,
+    suppression: false,
+    deplacement: false,
+    creation: false,
+  },
   admin: {
     consultation: true,
     emprunt: true,
@@ -93,7 +104,7 @@ function cloneDefaultMatrix() {
 
 const state = {
   profile: null,
-  role: "user",
+  role: "new_user",
   suggestionCount: 0,
   myOpenLoanCount: 0,
   users: [],
@@ -133,7 +144,7 @@ function setStatus(id, message, clearAfterMs = 0) {
 function normalizeRole(role) {
   const r = String(role ?? "").trim().toLowerCase();
   if (KNOWN_ROLES.includes(r)) return r;
-  return "user";
+  return "new_user";
 }
 
 function isAdminRole(role) {
@@ -145,6 +156,7 @@ function roleLabel(role) {
   return role === "super_admin" ? "Super-admin"
     : role === "admin" ? "Administrateur"
     : role === "consultant" ? "Consultant"
+    : role === "new_user" ? "Salle d'attente"
     : "Utilisateur";
 }
 
@@ -230,6 +242,12 @@ function buildNavLinks(role) {
       { label: "Emprunts", href: "./loans.html" },
       { label: "Suggestions", href: "./suggestions.html", badge: Number(state.suggestionCount) || 0 },
       { label: "Journal d'audit", href: "./configuration.html" },
+      { label: "Déconnexion", action: "logout", danger: true },
+    ];
+  }
+  if (role === "new_user") {
+    return [
+      { label: "Salle d'attente", href: "./waiting.html" },
       { label: "Déconnexion", action: "logout", danger: true },
     ];
   }
@@ -1027,9 +1045,13 @@ async function boot() {
   await requireSessionOrRedirect();
   state.profile = await getMyProfile();
   state.role = normalizeRole(state.profile?.role);
+  if (isPendingApprovalRole(state.role)) {
+    redirectToRoleHome(state.role);
+    return;
+  }
 
   if (!isAdminRole(state.role)) {
-    window.location.href = "./index.html";
+    redirectToRoleHome(state.role);
     return;
   }
 

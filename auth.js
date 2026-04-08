@@ -9,8 +9,36 @@ function normalizeRole(role) {
     .replace(/\s+/g, "_");
 
   if (raw === "super_admin" || raw === "superadmin") return "super_admin";
-  if (raw === "admin" || raw === "user" || raw === "consultant") return raw;
-  return "user";
+  if (raw === "admin" || raw === "user" || raw === "consultant" || raw === "new_user") return raw;
+  return "new_user";
+}
+
+function defaultDisplayNameForUser(user) {
+  const metadataName = String(user?.user_metadata?.display_name ?? "").trim();
+  if (metadataName) return metadataName;
+  const email = String(user?.email ?? "").trim();
+  const fallback = email.includes("@") ? email.split("@")[0] : email;
+  return fallback || "Nouvel utilisateur";
+}
+
+function buildProfileFromUser(user, profile = null) {
+  return {
+    id: profile?.id ?? user?.id ?? null,
+    display_name: profile?.display_name ?? defaultDisplayNameForUser(user),
+    role: normalizeRole(profile?.role ?? user?.user_metadata?.role ?? "new_user"),
+  };
+}
+
+export function isPendingApprovalRole(role) {
+  return normalizeRole(role) === "new_user";
+}
+
+export function getHomeRouteForRole(role) {
+  return isPendingApprovalRole(role) ? "./waiting.html" : "./index.html";
+}
+
+export function redirectToRoleHome(role) {
+  window.location.href = getHomeRouteForRole(role);
 }
 
 function inferDomainFromEmail(email) {
@@ -33,6 +61,19 @@ export async function requireSessionOrRedirect() {
 
 export async function signIn(email, password) {
   return await supa.auth.signInWithPassword({ email, password });
+}
+
+export async function signUp(displayName, email, password) {
+  return await supa.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        display_name: String(displayName ?? "").trim(),
+        role: "new_user",
+      },
+    },
+  });
 }
 
 export async function signInWithCompanySSO({ email, redirectTo } = {}) {
@@ -73,9 +114,23 @@ export async function getMyProfile() {
     .maybeSingle();
 
   if (error) throw error;
-  if (!data) return null;
-  return {
-    ...data,
-    role: normalizeRole(data.role),
-  };
+  if (data) return buildProfileFromUser(s.user, data);
+
+  const fallbackProfile = buildProfileFromUser(s.user);
+  try {
+    const { data: created, error: createError } = await supa
+      .from("user_profiles")
+      .upsert({
+        id: s.user.id,
+        display_name: fallbackProfile.display_name,
+        role: "new_user",
+      }, { onConflict: "id" })
+      .select("id, display_name, role")
+      .single();
+
+    if (createError) throw createError;
+    return buildProfileFromUser(s.user, created);
+  } catch {
+    return fallbackProfile;
+  }
 }

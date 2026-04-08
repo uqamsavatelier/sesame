@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Gestion des cl&eacute;s - Connexion</title>
-  <link rel="stylesheet" href="./style.css?v=20260220j" />
+  <link rel="stylesheet" href="./style.css?v=20260408a" />
 </head>
 <body class="login-page">
 
@@ -52,12 +52,56 @@
         <button id="btnLogin" class="btn login-btn">Se connecter</button>
       </div>
 
+      <div class="login-note">
+        Les nouveaux comptes sont placés en salle d'attente jusqu'à validation par un administrateur.
+      </div>
+
       <div class="login-separator" aria-hidden="true">
-        <span>OU</span>
+        <span>CRÉER UN COMPTE</span>
+      </div>
+
+      <div class="login-fields login-signup-fields">
+        <label class="field-shell" for="signupDisplayName">
+          <span class="field-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.1 0-7.5 2.2-7.5 4.8 0 .4.3.7.7.7h13.6c.4 0 .7-.3.7-.7C19.5 16.2 16.1 14 12 14Z"></path>
+            </svg>
+          </span>
+          <input id="signupDisplayName" class="input login-input" type="text" placeholder="Nom (Display Name)" autocomplete="name" />
+        </label>
+
+        <label class="field-shell" for="signupEmail">
+          <span class="field-icon" aria-hidden="true">
+            <svg class="icon-mail" viewBox="0 0 24 24" focusable="false">
+              <rect x="3.5" y="6.5" width="17" height="11" rx="2.2"></rect>
+              <path d="M4.5 8.3 12 13.2l7.5-4.9"></path>
+              <path d="M4.5 16.5 9.6 12.8"></path>
+              <path d="M19.5 16.5 14.4 12.8"></path>
+            </svg>
+          </span>
+          <input id="signupEmail" class="input login-input" type="email" placeholder="Courriel" autocomplete="email" />
+        </label>
+
+        <label class="field-shell" for="signupPassword">
+          <span class="field-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <path d="M17 10h-1V8a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2Zm-7-2a2 2 0 1 1 4 0v2h-4V8Z"></path>
+            </svg>
+          </span>
+          <input id="signupPassword" class="input login-input" type="password" placeholder="Mot de passe" autocomplete="new-password" />
+          <button id="toggleSignupPassword" class="pwd-toggle" type="button" aria-label="Afficher le mot de passe">
+            <svg class="eye-open" viewBox="0 0 24 24" focusable="false">
+              <path d="M12 5c4.9 0 8.8 2.9 10.4 6.8a1 1 0 0 1 0 .7C20.8 16.4 16.9 19.3 12 19.3S3.2 16.4 1.6 12.5a1 1 0 0 1 0-.7C3.2 7.9 7.1 5 12 5Zm0 2C8.1 7 5 9.1 3.6 12 5 14.9 8.1 17 12 17s7-2.1 8.4-5C19 9.1 15.9 7 12 7Zm0 2.3A2.7 2.7 0 1 1 12 14.7a2.7 2.7 0 0 1 0-5.4Z"></path>
+            </svg>
+            <svg class="eye-off" viewBox="0 0 24 24" focusable="false">
+              <path d="m3.3 2 18.7 18.7-1.4 1.4-2.8-2.8c-1.7.9-3.7 1.4-5.8 1.4-4.9 0-8.8-2.9-10.4-6.8a1 1 0 0 1 0-.7A11.7 11.7 0 0 1 6.5 7L1.9 2.4 3.3 2Zm5 7 1.5 1.5a2.7 2.7 0 0 0 3.6 3.6l1.5 1.5a4.7 4.7 0 0 1-6.6-6.6ZM12 7c3.9 0 7 2.1 8.4 5a10 10 0 0 1-3.9 4.3l-1.4-1.4A8.1 8.1 0 0 0 18.4 12C17 9.1 13.9 7 10 7a8.1 8.1 0 0 0-2 .2L6.3 5.5A11.8 11.8 0 0 1 12 7Z"></path>
+            </svg>
+          </button>
+        </label>
       </div>
 
       <div class="login-actions">
-        <button id="btnSso" class="btn secondary login-sso-btn">Connexion SSO d'entreprise</button>
+        <button id="btnSignup" class="btn secondary login-secondary-btn">Créer un compte</button>
       </div>
 
       <div id="msg" class="muted login-msg" role="status" aria-live="polite"></div>
@@ -66,7 +110,7 @@
 
   <div class="app-version">Version 2.9.6</div>
 
-  <script type="module" src="./login.js?v=20260220j"></script>
+  <script type="module" src="./login.js?v=20260408a"></script>
 </body>
 </html>
 

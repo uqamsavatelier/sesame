@@ -1,4 +1,4 @@
-import { signIn, signInWithCompanySSO, getSession } from "./auth.js";
+import { signIn, signUp, getSession, getMyProfile, redirectToRoleHome } from "./auth.js";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks } from "./audit.js";
 
 const $ = (id) => document.getElementById(id);
@@ -15,8 +15,15 @@ const setMessage = (value) => {
 
 (async () => {
   const s = await getSession();
-  if (s) window.location.href = "./index.html";
+  if (!s) return;
+  const profile = await getMyProfile();
+  redirectToRoleHome(profile?.role ?? "new_user");
 })();
+
+async function redirectCurrentUserHome() {
+  const profile = await getMyProfile();
+  redirectToRoleHome(profile?.role ?? "new_user");
+}
 
 async function doLogin() {
   setMessage("Connexion...");
@@ -25,25 +32,43 @@ async function doLogin() {
     const password = $("password").value;
     const { error } = await signIn(email, password);
     if (error) throw error;
-    window.location.href = "./index.html";
+    await redirectCurrentUserHome();
+  } catch (e) {
+    setMessage(e?.message ?? String(e));
+  }
+}
+
+async function doSignup() {
+  setMessage("Création du compte...");
+  try {
+    const displayName = $("signupDisplayName").value.trim();
+    const email = $("signupEmail").value.trim();
+    const password = $("signupPassword").value;
+
+    if (!displayName) throw new Error("Le nom est requis.");
+    if (!email) throw new Error("Le courriel est requis.");
+    if (!password) throw new Error("Le mot de passe est requis.");
+    if (password.length < 8) throw new Error("Le mot de passe doit contenir au moins 8 caractères.");
+
+    const { data, error } = await signUp(displayName, email, password);
+    if (error) throw error;
+
+    $("email").value = email;
+    $("signupPassword").value = "";
+
+    if (data?.session) {
+      await redirectCurrentUserHome();
+      return;
+    }
+
+    setMessage("Compte créé. Vérifie ton courriel, puis connecte-toi. L'accès sera débloqué par un administrateur.");
   } catch (e) {
     setMessage(e?.message ?? String(e));
   }
 }
 
 $("btnLogin").addEventListener("click", doLogin);
-
-$("btnSso").addEventListener("click", async () => {
-  setMessage("Redirection SSO...");
-  try {
-    const email = $("email").value.trim();
-    const redirectTo = new URL("./index.html", window.location.href).toString();
-    const { error } = await signInWithCompanySSO({ email, redirectTo });
-    if (error) throw error;
-  } catch (e) {
-    setMessage(e?.message ?? String(e));
-  }
-});
+$("btnSignup").addEventListener("click", doSignup);
 
 ["email", "password"].forEach((id) => {
   $(id).addEventListener("keydown", (event) => {
@@ -53,14 +78,27 @@ $("btnSso").addEventListener("click", async () => {
   });
 });
 
-const passwordInput = $("password");
-const togglePassword = $("togglePassword");
-togglePassword?.addEventListener("click", () => {
-  const reveal = passwordInput.type === "password";
-  passwordInput.type = reveal ? "text" : "password";
-  togglePassword.classList.toggle("is-visible", reveal);
-  togglePassword.setAttribute(
-    "aria-label",
-    reveal ? "Masquer le mot de passe" : "Afficher le mot de passe",
-  );
+["signupDisplayName", "signupEmail", "signupPassword"].forEach((id) => {
+  $(id).addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    doSignup();
+  });
 });
+
+function bindPasswordToggle(buttonId, inputId) {
+  const input = $(inputId);
+  const button = $(buttonId);
+  button?.addEventListener("click", () => {
+    const reveal = input.type === "password";
+    input.type = reveal ? "text" : "password";
+    button.classList.toggle("is-visible", reveal);
+    button.setAttribute(
+      "aria-label",
+      reveal ? "Masquer le mot de passe" : "Afficher le mot de passe",
+    );
+  });
+}
+
+bindPasswordToggle("togglePassword", "password");
+bindPasswordToggle("toggleSignupPassword", "signupPassword");
