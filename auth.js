@@ -63,11 +63,12 @@ export async function signIn(email, password) {
   return await supa.auth.signInWithPassword({ email, password });
 }
 
-export async function signUp(displayName, email, password) {
+export async function signUp(displayName, email, password, emailRedirectTo = "") {
   return await supa.auth.signUp({
     email,
     password,
     options: {
+      emailRedirectTo: String(emailRedirectTo ?? "").trim() || undefined,
       data: {
         display_name: String(displayName ?? "").trim(),
         role: "new_user",

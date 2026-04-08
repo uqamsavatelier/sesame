@@ -50,13 +50,14 @@ async function doSignup() {
     const displayName = $("signupDisplayName").value.trim();
     const email = $("signupEmail").value.trim();
     const password = $("signupPassword").value;
+    const emailRedirectTo = new URL("./login.html", window.location.href).toString();
 
     if (!displayName) throw new Error("Le nom est requis.");
     if (!email) throw new Error("Le courriel est requis.");
     if (!password) throw new Error("Le mot de passe est requis.");
     if (password.length < 8) throw new Error("Le mot de passe doit contenir au moins 8 caractères.");
 
-    const { data, error } = await signUp(displayName, email, password);
+    const { data, error } = await signUp(displayName, email, password, emailRedirectTo);
     if (error) throw error;
 
     if (data?.session) await signOutSilently();
