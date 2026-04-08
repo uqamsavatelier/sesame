@@ -1,5 +1,6 @@
 import { signIn, signUp, getSession, getMyProfile, redirectToRoleHome, signOutSilently } from "./auth.js";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks } from "./audit.js";
+import { APP_LOGIN_URL } from "./supabaseClient.js";
 
 const $ = (id) => document.getElementById(id);
 const setMessage = (value) => {
@@ -50,7 +51,7 @@ async function doSignup() {
     const displayName = $("signupDisplayName").value.trim();
     const email = $("signupEmail").value.trim();
     const password = $("signupPassword").value;
-    const emailRedirectTo = new URL("./login.html", window.location.href).toString();
+    const emailRedirectTo = APP_LOGIN_URL;
 
     if (!displayName) throw new Error("Le nom est requis.");
     if (!email) throw new Error("Le courriel est requis.");
