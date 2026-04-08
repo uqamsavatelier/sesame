@@ -1,0 +1,636 @@
+﻿<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Gestion clés — Accueil</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body class="loading">
+
+<header class="topbar">
+  <a class="topbar-logo" href="./index.html" aria-label="Accueil">
+    <img class="logo-dark" src="./ressources/sesame_logo_dark.png?v=20260216" alt="Sesame" />
+    <img class="logo-light" src="./ressources/sesame_logo_light.png?v=20260216" alt="Sesame" />
+  </a>
+  <div>
+    <h1 class="h1" id="pageTitle"></h1>
+    <div id="sessionInfo" class="muted">—</div>
+  </div>
+
+  <!-- burger -->
+  <button id="btnBurger" class="burger-btn" aria-label="Menu" aria-expanded="false">
+    <span></span><span></span><span></span>
+    <span id="burgerBadge" class="burger-badge" hidden>0</span>
+  </button>
+</header>
+
+<!-- Drawer -->
+<div id="navOverlay" class="nav-overlay" hidden></div>
+<aside id="navDrawer" class="nav-drawer" aria-hidden="true">
+  <div class="nav-head">
+    <div class="nav-hello" id="navHello">Bonjour —</div>
+    <div class="nav-role" id="navRole">—</div>
+  </div>
+  <div class="nav-sep"></div>
+
+  <nav class="nav-links" id="navLinksTop"></nav>
+
+  <div class="nav-sep"></div>
+
+<div class="nav-sep"></div>
+
+<div class="nav-theme">
+  <div class="muted" style="font-size:12px;">Thème</div>
+
+  <div id="themeSeg" class="seg" role="group" aria-label="Thème">
+    <span class="seg-label">Sombre</span>
+    <button type="button" class="seg-btn" aria-label="Basculer le thème"></button>
+    <span class="seg-label">Claire</span>
+  </div>
+</div>
+
+
+  <div class="nav-sep"></div>
+
+  <nav class="nav-links bottom" id="navLinksBottom"></nav>
+</aside>
+
+<main class="container">
+
+  <!-- ===================== ACCUEIL : tuiles armoires ===================== -->
+  <section id="homeView" class="card">
+    <div class="page-card-head">
+      <h1 class="h1">Accueil</h1>
+    </div>
+    <div class="row" style="margin-bottom:10px;">
+      <div class="muted">
+        Choisis une armoire.
+      </div>
+      <div class="spacer"></div>
+      <button id="btnAddCabinet" class="btn reactive" style="display:none;">Ajouter une armoire</button>
+    </div>
+    <div id="cabinetGrid" class="cabinet-grid"></div>
+  </section>
+
+  <!-- ===================== CLÉS : dropdown + recherche + liste ===================== -->
+  <section id="keysView" class="card" style="display:none;">
+    <div class="keys-view-head">
+      <h1 class="h1" id="pageTitleCenter">Liste des clés</h1>
+      <div id="sessionInfoCenter" class="muted">--</div>
+    </div>
+
+    <div class="row">
+      <select id="cabinetSelect" class="select"></select>
+      <div class="spacer"></div>
+
+      <!-- admin only -->
+      <button id="btnAddKeys" class="btn" style="display:none;">Ajouter des clés</button>
+    </div>
+
+    <!-- pagination en haut -->
+    <div class="pagination pagination-top pager-row">
+      <input id="q" class="input" placeholder="Recherche (local, clé, trousseau, crochet)." />
+      <div class="spacer"></div>
+      <div id="pagerTop" class="pager"></div>
+    </div>
+
+    <div id="list" class="list"></div>
+
+    <!-- pagination en bas (comme tu veux) -->
+    <div class="pagination pagination-bottom">
+      <div id="pagerBottom" class="pager"></div>
+    </div>
+    <span id="pageInfo" class="muted" hidden></span>
+  </section>
+
+</main>
+
+<!-- ===================== MODAL : Éditer armoire ===================== -->
+<div id="cabinetEditOverlay" class="edit-overlay" hidden></div>
+
+<section id="cabinetEditModal" class="edit-modal" hidden aria-hidden="true">
+  <div class="hook-modal-head">
+    <div>
+      <div class="title">Éditer l'armoire</div>
+      <div class="muted">Modifier les informations de l'armoire</div>
+    </div>
+    <button id="cabEditClose" class="btn secondary reactive">Fermer</button>
+  </div>
+
+  <div class="edit-grid">
+    <label class="field">
+      <div class="muted">Nom</div>
+      <input id="cab_edit_name" class="input" />
+    </label>
+    <label class="field">
+      <div class="muted">Emplacement</div>
+      <input id="cab_edit_location" class="input" />
+    </label>
+    <label class="field">
+      <div class="muted">Maximum de crochets</div>
+      <input id="cab_edit_max_hooks" class="input" type="number" min="1" step="1" />
+    </label>
+    <label class="field">
+      <div class="muted">Pavillon</div>
+      <select id="cab_edit_pavilion_id" class="select"></select>
+    </label>
+    <label class="field">
+      <div class="muted">En fonction</div>
+      <select id="cab_edit_is_active" class="select">
+        <option value="true">Oui</option>
+        <option value="false">Non</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="row" style="margin-top:12px;">
+    <button id="cabEditDelete" class="btn danger reactive">Supprimer l'armoire</button>
+    <div class="spacer"></div>
+    <button id="cabEditSave" class="btn reactive">Enregistrer</button>
+    <button id="cabEditCancel" class="btn secondary reactive">Annuler</button>
+    <div id="cabEditStatus" class="muted"></div>
+  </div>
+</section>
+
+<!-- ===================== MODAL : Ajouter armoire ===================== -->
+<div id="cabinetCreateOverlay" class="edit-overlay" hidden></div>
+
+<section id="cabinetCreateModal" class="edit-modal" hidden aria-hidden="true">
+  <div class="hook-modal-head">
+    <div>
+      <div class="title">Ajouter une armoire</div>
+      <div class="muted">Créer une nouvelle armoire</div>
+    </div>
+    <button id="cabCreateClose" class="btn secondary reactive">Fermer</button>
+  </div>
+
+  <div class="edit-grid">
+    <label class="field">
+      <div class="muted">Nom</div>
+      <input id="cab_create_name" class="input" />
+    </label>
+    <label class="field">
+      <div class="muted">Emplacement</div>
+      <input id="cab_create_location" class="input" />
+    </label>
+    <label class="field">
+      <div class="muted">Maximum de crochets</div>
+      <input id="cab_create_max_hooks" class="input" type="number" min="1" step="1" />
+    </label>
+    <label class="field">
+      <div class="muted">Pavillon</div>
+      <select id="cab_create_pavilion_id" class="select"></select>
+    </label>
+  </div>
+
+  <div class="row" style="margin-top:12px;">
+    <button id="cabCreateSave" class="btn reactive">Créer</button>
+    <button id="cabCreateCancel" class="btn secondary reactive">Annuler</button>
+    <div id="cabCreateStatus" class="muted"></div>
+  </div>
+</section>
+
+<!-- ===================== MODAL : Ajouter des clés (Admin) ===================== -->
+<div id="modalOverlay" class="modal-overlay" hidden></div>
+
+<section id="addKeysModal" class="modal" hidden aria-hidden="true">
+  <div class="modal-head">
+    <div>
+      <div class="title">Ajouter des clés</div>
+      <div class="muted">Import CSV ou ajout manuel</div>
+    </div>
+    <button id="btnCloseModal" class="btn secondary">Fermer</button>
+  </div>
+
+  <div class="tabs">
+    <button id="tabManual" class="tab active" type="button">Ajout manuel</button>
+    <button id="tabCsv" class="tab" type="button">Import CSV</button>
+  </div>
+
+  <!-- ----- CSV ----- -->
+  <div id="panelCsv" class="panel" style="display:none;">
+    <p class="muted">Colonnes attendues : tag,key_no,pavillon,local,utilisation,departement,quantite,remarque</p>
+
+    <div class="row" style="gap:10px; flex-wrap:wrap;">
+      <input id="csvFile" type="file" accept=".csv,text/csv" />
+      <button id="btnPreviewCsv" class="btn">Prévisualiser</button>
+      <button id="btnImportCsv" class="btn" disabled>Importer</button>
+    </div>
+
+    <div id="csvStatus" class="muted" style="margin-top:8px;">—</div>
+    <div id="csvPreview" style="margin-top:10px;"></div>
+  </div>
+
+  <!-- ----- MANUEL ----- -->
+  <div id="panelManual" class="panel">
+    <div id="hookContext" class="hook-context" style="display:none;"></div>
+
+    <div class="form-manual">
+  <!-- ligne 1: crochet / clé / pav / local / qty -->
+  <div class="row compact">
+    <div class="field">
+      <div class="muted">Crochet</div>
+      <input id="m_hook" class="input" placeholder="12" />
+    </div>
+    <div class="field">
+      <div class="muted">No clé</div>
+      <input id="m_keyno" class="input" placeholder="123 (optionnel)" />
+    </div>
+    <div class="field">
+      <div class="muted">Pavillon</div>
+      <select id="m_pavilion_id" class="select"></select>
+    </div>
+    <div class="field">
+      <div class="muted">Local</div>
+      <input id="m_local" class="input" placeholder="A-1234" />
+    </div>
+    <div class="field field-qty">
+      <div class="muted">Qté</div>
+      <input id="m_qty" class="input" type="number" min="1" max="999" value="1" />
+    </div>
+  </div>
+
+  <!-- ligne 2: utilisation / remarque / checkbox -->
+<div class="manual-row2">
+  <div class="mr2-left">
+    <div class="field field-wide">
+      <div class="muted">Utilisation</div>
+      <input id="m_utilisation" class="input" placeholder="Salle de classe" />
+    </div>
+
+    <label class="checkline mr2-check">
+      <input id="m_is_keyring" type="checkbox" />
+      Fait partie d'un trousseau
+    </label>
+  </div>
+
+  <div class="field field-wide">
+    <div class="muted">Remarque</div>
+    <input id="m_remarque" class="input" placeholder="Carte d'accès / trousseau..." />
+  </div>
+</div>
+
+
+
+
+    <div id="keyringBox" class="keyring-box" style="display:none;">
+      <div class="muted" style="margin-bottom:8px;">
+        Lignes du trousseau (même crochet). Pavillon/Local préremplis, modifiables.
+      </div>
+
+      <div id="keyringRows" class="keyring-rows"></div>
+
+      <div class="row" style="margin-top:10px;">
+        <button id="btnAddKeyringRow" class="btn secondary" type="button">+ Ajouter une ligne</button>
+        <div class="spacer"></div>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:14px;">
+      <button id="btnManualSubmit" class="btn">Ajouter</button>
+      <div id="manualStatus" class="muted"></div>
+    </div>
+    <div id="hookExistingDetails" class="hook-existing-details" style="display:none;"></div>
+  </div>
+</section>
+
+<!-- ===================== MODAL : Détail crochet ===================== -->
+<div id="hookOverlay" class="hook-overlay" hidden></div>
+
+<section id="hookModal" class="hook-modal" hidden aria-hidden="true">
+  <div class="hook-modal-head">
+    <div>
+      <div class="title" id="hookModalTitle">Crochet #—</div>
+      <div class="muted" id="hookModalSub">Détail des clés et trousseaux</div>
+    </div>
+    <button id="hookModalClose" class="btn secondary reactive">Fermer</button>
+  </div>
+
+  <div class="hook-actions row" id="hookModalActions">
+    <button id="hookBorrowAll" class="btn reactive">Tout emprunter</button>
+    <button id="hookReturnAll" class="btn secondary reactive">Tout retourner</button>
+    <button id="hookAddKey" class="btn secondary reactive">Ajouter une clé</button>
+    <button id="hookCreateKeyring" class="btn secondary reactive" style="display:none;">Créer un trousseau</button>
+    <button id="hookAddToKeyring" class="btn secondary reactive" style="display:none;">Ajouter à un trousseau</button>
+    <button id="hookRemoveFromKeyring" class="btn secondary reactive" style="display:none;">Retirer du trousseau</button>
+    <div class="spacer"></div>
+    <button id="hookProposals" class="btn secondary reactive">Suggestions</button>
+  </div>
+
+  <div id="hookModalContent"></div>
+</section>
+
+<!-- ===================== MODAL : Proposer une modification ===================== -->
+<div id="proposalOverlay" class="edit-overlay" hidden></div>
+
+<section id="proposalModal" class="edit-modal" hidden aria-hidden="true">
+  <div class="hook-modal-head">
+    <div>
+      <div class="title">Suggérer une modification</div>
+      <div class="muted">Générale ou liée — un crochet / une clé</div>
+    </div>
+    <button id="proposalClose" class="btn secondary reactive">Fermer</button>
+  </div>
+
+  <div class="row" style="margin-top:12px;">
+    <label class="row" style="gap:6px;">
+      <input type="radio" name="proposalScope" id="proposalScopeGeneral" value="general" />
+      <span>Suggestion générale</span>
+    </label>
+    <label class="row" style="gap:6px;">
+      <input type="radio" name="proposalScope" id="proposalScopeSpecific" value="specific" checked />
+      <span>Suggestion spécifique</span>
+    </label>
+  </div>
+
+  <div class="row" id="proposalTargetRow" style="margin-top:10px;">
+    <div style="width:100%">
+      <div class="muted" style="margin-bottom:6px;">Cible (crochet ou clé)</div>
+      <select id="proposalTarget" class="select" style="width:100%"></select>
+    </div>
+  </div>
+
+  <div style="margin-top:10px;">
+    <div class="muted" style="margin-bottom:6px;">Message</div>
+    <textarea id="proposalMessage" class="input" style="width:100%; min-height:120px;"></textarea>
+  </div>
+
+  <div class="row" style="margin-top:12px;">
+    <button id="proposalSave" class="btn">Enregistrer</button>
+    <button id="proposalCancel" class="btn secondary reactive">Annuler</button>
+    <div id="proposalStatus" class="muted"></div>
+  </div>
+</section>
+
+<!-- ===================== MODAL : éditer clé ===================== -->
+<div id="editOverlay" class="edit-overlay" hidden></div>
+
+<section id="editModal" class="edit-modal" hidden aria-hidden="true">
+  <div class="hook-modal-head">
+    <div>
+      <div class="title">éditer clé</div>
+      <div class="muted">Modifier les informations de la clé</div>
+    </div>
+    <button id="editClose" class="btn secondary reactive">Fermer</button>
+  </div>
+
+  <div class="edit-grid">
+    <label class="field">
+      <div class="muted">No crochet</div>
+      <input id="edit_hook_no" class="input" type="number" min="1" />
+    </label>
+    <label class="field">
+      <div class="muted">No cle</div>
+      <input id="edit_key_no" class="input" />
+    </label>
+    <label class="field">
+      <div class="muted">Local</div>
+      <input id="edit_local" class="input" />
+    </label>
+    <label class="field">
+      <div class="muted">Pavillon</div>
+      <select id="edit_pavilion_id" class="select"></select>
+    </label>
+    <label class="field">
+      <div class="muted">Utilisation</div>
+      <input id="edit_utilisation" class="input" />
+    </label>
+    <label class="field">
+      <div class="muted">Remarque</div>
+      <input id="edit_remarque" class="input" />
+    </label>
+    <label class="field">
+      <div class="muted">Quantité</div>
+      <input id="edit_quantite" class="input" type="number" min="1" max="999" />
+    </label>
+    <label class="field">
+      <div class="muted">Trousseau</div>
+      <select id="edit_keyring" class="select"></select>
+    </label>
+  </div>
+
+  <div class="row" style="margin-top:12px;">
+    <button id="editSave" class="btn reactive">Enregistrer</button>
+    <button id="editCancel" class="btn secondary reactive">Annuler</button>
+    <div id="editStatus" class="muted"></div>
+  </div>
+</section>
+
+<!-- ===================== MODAL : éditer trousseau ===================== -->
+<div id="keyringEditOverlay" class="edit-overlay" hidden></div>
+
+<section id="keyringEditModal" class="edit-modal" hidden aria-hidden="true">
+  <div class="hook-modal-head">
+    <div>
+      <div class="title">éditer trousseau</div>
+      <div class="muted">Modifier les informations du trousseau</div>
+    </div>
+    <button id="krEditClose" class="btn secondary reactive">Fermer</button>
+  </div>
+
+  <div class="edit-grid">
+    <label class="field">
+      <div class="muted">No crochet</div>
+      <input id="kr_edit_hook_no" class="input" type="number" min="1" />
+    </label>
+    <label class="field">
+      <div class="muted">Identifiant de trousseau</div>
+      <input id="kr_edit_ring_code" class="input" />
+    </label>
+    <label class="field">
+      <div class="muted">Nom</div>
+      <input id="kr_edit_name" class="input" />
+    </label>
+    <label class="field">
+      <div class="muted">Note</div>
+      <input id="kr_edit_note" class="input" />
+    </label>
+    <div class="field">
+      <div class="muted">Crochet</div>
+      <div id="kr_edit_hook" class="badge">—</div>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:12px;">
+    <button id="krEditSave" class="btn reactive">Enregistrer</button>
+    <button id="krEditCancel" class="btn secondary reactive">Annuler</button>
+    <div id="krEditStatus" class="muted"></div>
+  </div>
+</section>
+
+<!-- ===================== MODAL : Créer trousseau ===================== -->
+<div id="keyringCreateOverlay" class="edit-overlay" hidden></div>
+
+<section id="keyringCreateModal" class="edit-modal" hidden aria-hidden="true">
+  <div class="hook-modal-head">
+    <div>
+      <div class="title">Créer un trousseau</div>
+      <div class="muted">Sélectionner les clés du trousseau</div>
+    </div>
+    <button id="krCreateClose" class="btn secondary reactive">Fermer</button>
+  </div>
+
+  <div class="edit-grid">
+    <label class="field">
+      <div class="muted">Identifiant de trousseau</div>
+      <input id="kr_create_ring_code" class="input" />
+    </label>
+    <label class="field">
+      <div class="muted">Nom</div>
+      <input id="kr_create_name" class="input" placeholder="ex: Régie vidéo" />
+    </label>
+    <label class="field">
+      <div class="muted">Note</div>
+      <input id="kr_create_note" class="input" />
+    </label>
+    <div class="field">
+      <div class="muted">Crochet</div>
+      <div id="kr_create_hook" class="badge">—</div>
+    </div>
+  </div>
+
+  <div class="keyring-create-actions row" style="margin-top:12px;">
+    <button id="krCreateAddKey" class="btn secondary reactive">Ajouter une nouvelle clé</button>
+    <div class="spacer"></div>
+  </div>
+
+  <div id="krCreateList" class="keyring-create-list"></div>
+
+  <div class="row" style="margin-top:12px;">
+    <button id="krCreateSave" class="btn reactive">Créer</button>
+    <button id="krCreateCancel" class="btn secondary reactive">Annuler</button>
+    <div id="krCreateStatus" class="muted"></div>
+  </div>
+</section>
+
+<!-- ===================== MODAL : Ajouter à un trousseau ===================== -->
+<div id="keyringPickOverlay" class="edit-overlay" hidden></div>
+
+<section id="keyringPickModal" class="edit-modal" hidden aria-hidden="true">
+  <div class="hook-modal-head">
+    <div>
+      <div class="title">Ajouter à un trousseau</div>
+      <div class="muted">Choisir le trousseau cible</div>
+    </div>
+    <button id="krPickClose" class="btn secondary reactive">Fermer</button>
+  </div>
+
+  <div class="edit-grid">
+    <label class="field">
+      <div class="muted">Trousseau</div>
+      <select id="kr_pick_select" class="select"></select>
+    </label>
+    <div class="field">
+      <div class="muted">Crochet</div>
+      <div id="kr_pick_hook" class="badge">—</div>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:12px;">
+    <button id="krPickSave" class="btn reactive">Ajouter</button>
+    <button id="krPickCancel" class="btn secondary reactive">Annuler</button>
+    <div id="krPickStatus" class="muted"></div>
+  </div>
+</section>
+
+<!-- ===================== MODAL : Clé dans trousseau ===================== -->
+<div id="keyInRingOverlay" class="edit-overlay" hidden></div>
+
+<section id="keyInRingModal" class="edit-modal" hidden aria-hidden="true">
+  <div class="hook-modal-head">
+    <div>
+      <div class="title">Clé dans un trousseau</div>
+      <div class="muted">Que veux-tu faire ?</div>
+    </div>
+    <button id="keyInRingClose" class="btn secondary reactive">Fermer</button>
+  </div>
+
+  <div class="row" style="margin-top:12px;">
+    <button id="keyInRingRemove" class="btn secondary reactive">Retirer du trousseau</button>
+    <button id="keyInRingDelete" class="btn danger reactive">Supprimer cette clé</button>
+    <div id="keyInRingStatus" class="muted"></div>
+  </div>
+</section>
+
+<!-- ===================== MODAL : Supprimer clé ===================== -->
+<div id="deleteKeyOverlay" class="edit-overlay" hidden></div>
+
+<section id="deleteKeyModal" class="edit-modal" hidden aria-hidden="true">
+  <div class="hook-modal-head">
+    <div>
+      <div class="title">Supprimer une clé</div>
+      <div class="muted">Cette action est définitive</div>
+    </div>
+    <button id="deleteKeyClose" class="btn secondary reactive">Fermer</button>
+  </div>
+
+  <div class="edit-grid">
+    <label class="field" style="grid-column: 1 / -1;">
+      <div class="muted">Raison de la suppression</div>
+      <input id="delete_key_reason" class="input" placeholder="Ex: Perdue définitivement, doublon, etc." />
+    </label>
+  </div>
+
+  <div class="row" style="margin-top:12px;">
+    <button id="deleteKeyConfirm" class="btn danger reactive">Supprimer définitivement</button>
+    <button id="deleteKeyCancel" class="btn secondary reactive">Annuler</button>
+    <div id="deleteKeyStatus" class="muted"></div>
+  </div>
+</section>
+
+<!-- ===================== MODAL : Clé manquante pendant un prêt ===================== -->
+<div id="missingPromptOverlay" class="edit-overlay" hidden></div>
+
+<section id="missingPromptModal" class="edit-modal" hidden aria-hidden="true">
+  <div class="hook-modal-head">
+    <div>
+      <div class="title">Clé signalée manquante</div>
+      <div class="muted" id="missingPromptText">—</div>
+    </div>
+    <button id="missingPromptClose" class="btn secondary reactive">Fermer</button>
+  </div>
+
+  <div class="row" style="margin-top:12px;">
+    <button id="missingPromptYes" class="btn danger reactive">Oui</button>
+    <button id="missingPromptNo" class="btn secondary reactive">Non</button>
+    <div id="missingPromptStatus" class="muted"></div>
+  </div>
+</section>
+
+<!-- ===================== MODAL : Retour d'une clé empruntée ===================== -->
+<div id="returnPromptOverlay" class="edit-overlay" hidden></div>
+
+<section id="returnPromptModal" class="edit-modal" hidden aria-hidden="true">
+  <div class="hook-modal-head">
+    <div>
+      <div class="title">Retour d'une clé</div>
+      <div class="muted" id="returnPromptText">—</div>
+    </div>
+    <button id="returnPromptClose" class="btn secondary reactive">Fermer</button>
+  </div>
+
+  <div class="row" id="returnPromptYesRow" style="margin-top:12px;">
+    <button id="returnPromptYes" class="btn primary reactive">Oui</button>
+    <button id="returnPromptNo" class="btn secondary reactive">Non</button>
+  </div>
+
+  <div class="row" id="returnPromptActionRow" style="margin-top:12px; display:none;">
+    <button id="returnPromptReturn" class="btn primary reactive">Retourner</button>
+    <button id="returnPromptBorrow" class="btn secondary reactive">Emprunter</button>
+    <button id="returnPromptCancel" class="btn secondary reactive">Annuler</button>
+  </div>
+
+  <div id="returnPromptStatus" class="muted" style="margin-top:8px;"></div>
+</section>
+
+<div class="app-version">Version 2.9.6</div>
+
+<script type="module" src="./app.js?v=20260220h"></script>
+</body>
+</html>
+
+
+
+
+

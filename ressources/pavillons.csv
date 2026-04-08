@@ -1,0 +1,38 @@
+code,nom,actif,campus
+A,Pavilon Hubert-Aquin,true,Campus de l'est
+AB,Pavillon Saint-Denis,true,Campus de l'est
+AD,Espace Quartier Latin,true,Campus de l'est
+B,Pavillon Maisonneuve,true,Campus de l'est
+C,Pavillon de l'Entrepreneuriat et de l'innovation,true,Campus de l'est
+CS,Centre sportif,true,Campus de l'est
+D,Pavillon Athanase-David,true,Campus de l'est
+DC,Pavillon Du Faubourg,true,Campus de l'est
+DE,Pavillon de Design,true,Campus de l'est
+DM,Pavillon de Mode,true,Campus de l'est
+DS,Pavillon J.-A.-DeSève,true,Campus de l'est
+ED,Pavillon de Design Annexe,true,Campus de l'est
+ES,Pavillon Émery,true,Campus de l'est
+F,Pavillon de Musique,true,Campus de l'est
+J,Pavillon Judith-Jasmin,true,Campus de l'est
+JE,Pavillon Judith-Jasmin Annexe,true,Campus de l'est
+K,Pavillon de Danse,true,Campus de l'est
+N,Pavillon Paul-Gérin-Lajoie,true,Campus de l'est
+Q,Centre Pierre-Péladeau,true,Campus de l'est
+R,Pavillon des Sciences de la gestion,true,Campus de l'est
+RL,Résidences universitaires René-Lévesque,true,Campus de l'est
+V,Pavillon Sainte-Catherine,true,Campus de l'est
+VA,Pavillon Hôtel-de-ville,true,Campus de l'est
+W,Pavillon Thérèse-Casgrain,true,Campus de l'est
+CB,Pavillon de Chimie et Biochimie,true,Campus de l'ouest
+CO,Pavillon Cœur des sciences,true,Campus de l'ouest
+KI,Bibliothèque des sciences,true,Campus de l'ouest
+PK,Pavillon Président-Kennedy,true,Campus de l'ouest
+RS,Résidences universitaires Saint-Urbain,true,Campus de l'ouest
+SB,Pavillon des Sciences biologiques,true,Campus de l'ouest
+SH,Pavillon Sherbrooke,true,Campus de l'ouest
+SU,Pavillon Adrien-Pinard,true,Campus de l'ouest
+UL,,true,Campus de Lanaudière
+LD,,true,Campus de Laval
+,,true,Campus de Longueuil
+,,true,Campus de la Montérégie-Ouest
+,,true,Centre de plein air de l'UQÀM

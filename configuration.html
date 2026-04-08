@@ -1,0 +1,207 @@
+﻿<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Gestion clés — Configuration</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body data-page="configuration">
+  <header class="topbar">
+    <a class="topbar-logo" href="./index.html" aria-label="Accueil">
+      <img class="logo-dark" src="./ressources/sesame_logo_dark.png?v=20260216" alt="Sesame" />
+      <img class="logo-light" src="./ressources/sesame_logo_light.png?v=20260216" alt="Sesame" />
+    </a>
+    <div>
+      <h1 id="topbarTitle" class="h1">Configuration</h1>
+      <div class="muted" id="pageSub">Rôles et utilisateurs</div>
+    </div>
+    <button id="btnBurger" class="burger-btn" aria-label="Menu" aria-expanded="false">
+      <span></span><span></span><span></span>
+      <span id="burgerBadge" class="burger-badge" hidden>0</span>
+    </button>
+  </header>
+
+  <div id="navOverlay" class="nav-overlay" hidden></div>
+  <aside id="navDrawer" class="nav-drawer" aria-hidden="true">
+    <div class="nav-head">
+      <div class="nav-hello" id="navHello">Bonjour -</div>
+      <div class="nav-role" id="navRole">-</div>
+    </div>
+    <div class="nav-sep"></div>
+    <nav class="nav-links" id="navLinksTop"></nav>
+    <div class="nav-sep"></div>
+    <div class="nav-sep"></div>
+    <div class="nav-theme">
+      <div class="muted" style="font-size:12px;">Thème</div>
+      <div id="themeSeg" class="seg" role="group" aria-label="Thème">
+        <span class="seg-label">Sombre</span>
+        <button type="button" class="seg-btn" aria-label="Basculer le thème"></button>
+        <span class="seg-label">Claire</span>
+      </div>
+    </div>
+    <div class="nav-sep"></div>
+    <nav class="nav-links bottom" id="navLinksBottom"></nav>
+  </aside>
+
+  <main class="container">
+    <section class="card">
+      <div class="page-card-head">
+        <h1 id="pageCardTitle" class="h1">Configuration</h1>
+      </div>
+      <div id="configTabs" class="tabs config-tabs" style="margin-bottom:12px;">
+        <button id="tabRolesBtn" class="tab active" type="button" data-tab="roles">Rôles et accès</button>
+        <button id="tabUsersBtn" class="tab" type="button" data-tab="users">Utilisateurs</button>
+        <button id="tabAuditBtn" class="tab" type="button" data-tab="audit">Journal d'audit</button>
+      </div>
+
+      <div id="configStatus" class="muted"></div>
+
+      <div id="tabRoles" class="config-tab">
+        <div style="overflow:auto; margin-top:10px;">
+          <table class="hook-existing-table" style="min-width:920px;">
+            <thead id="roleMatrixHead"></thead>
+            <tbody id="roleMatrixBody"></tbody>
+          </table>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <div id="roleMatrixStatus" class="muted"></div>
+          <div class="spacer"></div>
+          <button id="cancelRoleMatrix" class="btn secondary reactive" disabled>Annuler</button>
+          <button id="saveRoleMatrix" class="btn reactive" disabled>Enregistrer</button>
+        </div>
+      </div>
+
+      <div id="tabUsers" class="config-tab" style="display:none;">
+        <div class="row" style="gap:10px; margin-top:10px;">
+          <input id="usersQ" class="input" placeholder="Recherche utilisateur (nom, id, rôle)" />
+          <button id="refreshUsers" class="btn secondary reactive">Rafraîchir</button>
+        </div>
+        <div style="overflow:auto; margin-top:10px;">
+          <table class="hook-existing-table" style="min-width:980px;">
+            <thead>
+              <tr>
+                <th>Nom</th>
+                <th>ID utilisateur</th>
+                <th>Rôle actuel</th>
+                <th>Nouveau rôle</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="usersTableBody"></tbody>
+          </table>
+        </div>
+        <div id="usersStatus" class="muted" style="margin-top:8px;"></div>
+      </div>
+
+      <div id="tabAudit" class="config-tab" style="display:none;">
+        <div class="row" style="gap:10px; margin-top:10px;">
+          <div id="auditTypeFilters"></div>
+          <div class="spacer"></div>
+          <button id="refreshAudit" class="btn secondary reactive">Rafraîchir</button>
+        </div>
+        <div class="row" style="gap:10px; margin-top:10px; flex-wrap:wrap;">
+          <label class="row" style="gap:8px;">
+            <span class="muted">Affichage</span>
+            <select id="auditDisplayRange" class="select">
+              <option value="1h" selected>Dernière heure</option>
+              <option value="24h">Dernières 24h</option>
+              <option value="3d">Derniers 3 jours</option>
+              <option value="7d">Dernière semaine</option>
+            </select>
+          </label>
+          <button id="exportAuditBtn" class="btn secondary reactive">Exporter la vue actuelle</button>
+          <div id="auditExportStatus" class="muted"></div>
+        </div>
+        <div style="overflow:auto; margin-top:10px;">
+          <table class="hook-existing-table audit-table" style="min-width:1120px;">
+            <thead>
+              <tr>
+                <th>HORODATAGE</th>
+                <th>UTILISATEUR</th>
+                <th>ACTION</th>
+                <th>CIBLE</th>
+                <th>DÉTAILS</th>
+              </tr>
+            </thead>
+            <tbody id="auditTableBody"></tbody>
+          </table>
+        </div>
+        <div id="auditStatus" class="muted" style="margin-top:8px;"></div>
+        <div class="row" style="gap:10px; margin-top:14px;">
+          <div class="muted">Archives journalières (bucket `logs`)</div>
+          <div class="spacer"></div>
+          <button id="refreshAuditArchive" class="btn secondary reactive">Rafraîchir archives</button>
+        </div>
+        <div style="overflow:auto; margin-top:8px;">
+          <table class="hook-existing-table" style="min-width:820px;">
+            <thead>
+              <tr>
+                <th>Fichier</th>
+                <th>Date</th>
+                <th>Taille</th>
+                <th style="text-align:right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="auditArchiveBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <div id="auditDetailOverlay" class="edit-overlay" hidden></div>
+  <section id="auditDetailModal" class="edit-modal" hidden aria-hidden="true">
+    <div class="hook-modal-head">
+      <div>
+        <div class="title">Détail du log d'audit</div>
+        <div class="muted">Informations complètes de l'événement</div>
+      </div>
+      <button id="auditDetailClose" class="btn secondary reactive">Fermer</button>
+    </div>
+    <div style="margin-top:10px; display:grid; gap:8px;">
+      <div><strong>Horodatage:</strong> <span id="auditDetailTs"></span></div>
+      <div><strong>Utilisateur:</strong> <span id="auditDetailUser"></span></div>
+      <div><strong>Action:</strong> <span id="auditDetailAction"></span></div>
+      <div><strong>Cible:</strong> <span id="auditDetailTarget"></span></div>
+      <div><strong>Détails:</strong></div>
+      <pre id="auditDetailText" class="audit-detail-pre"></pre>
+    </div>
+  </section>
+
+  <div id="auditArchivePreviewOverlay" class="edit-overlay" hidden></div>
+  <section id="auditArchivePreviewModal" class="edit-modal" hidden aria-hidden="true">
+    <div class="hook-modal-head">
+      <div>
+        <div class="title">Aperçu de l'archive</div>
+        <div class="muted" id="auditArchivePreviewName">-</div>
+      </div>
+      <button id="auditArchivePreviewClose" class="btn secondary reactive">Fermer</button>
+    </div>
+    <div style="margin-top:10px; overflow:auto;">
+      <table class="hook-existing-table audit-table" style="min-width:1120px;">
+        <thead>
+          <tr>
+            <th>HORODATAGE</th>
+            <th>UTILISATEUR</th>
+            <th>ACTION</th>
+            <th>CIBLE</th>
+            <th>DÉTAILS</th>
+          </tr>
+        </thead>
+        <tbody id="auditArchivePreviewBody"></tbody>
+      </table>
+    </div>
+    <div id="auditArchivePreviewStatus" class="muted" style="margin-top:8px;"></div>
+  </section>
+
+  <div class="app-version">Version 2.9.6</div>
+
+  <script type="module" src="./configuration.js?v=20260221b"></script>
+</body>
+</html>
+
+
+
+

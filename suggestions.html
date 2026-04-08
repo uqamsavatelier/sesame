@@ -1,0 +1,274 @@
+﻿<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Gestion clés — Suggestions</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body data-page="suggestions">
+  <header class="topbar">
+    <a class="topbar-logo" href="./index.html" aria-label="Accueil">
+      <img class="logo-dark" src="./ressources/sesame_logo_dark.png?v=20260216" alt="Sesame" />
+      <img class="logo-light" src="./ressources/sesame_logo_light.png?v=20260216" alt="Sesame" />
+    </a>
+    <div>
+      <h1 class="h1">Suggestions</h1>
+      <div class="muted" id="pageSub">Suggestions des utilisateurs</div>
+    </div>
+    <button id="btnBurger" class="burger-btn" aria-label="Menu" aria-expanded="false">
+      <span></span><span></span><span></span>
+      <span id="burgerBadge" class="burger-badge" hidden>0</span>
+    </button>
+  </header>
+
+  <div id="navOverlay" class="nav-overlay" hidden></div>
+  <aside id="navDrawer" class="nav-drawer" aria-hidden="true">
+    <div class="nav-head">
+      <div class="nav-hello" id="navHello">Bonjour —</div>
+      <div class="nav-role" id="navRole">—</div>
+    </div>
+    <div class="nav-sep"></div>
+
+    <nav class="nav-links" id="navLinksTop"></nav>
+
+    <div class="nav-sep"></div>
+
+    <div class="nav-sep"></div>
+
+    <div class="nav-theme">
+      <div class="muted" style="font-size:12px;">Thème</div>
+      <div id="themeSeg" class="seg" role="group" aria-label="Thème">
+        <span class="seg-label">Sombre</span>
+        <button type="button" class="seg-btn" aria-label="Basculer le thème"></button>
+        <span class="seg-label">Claire</span>
+      </div>
+    </div>
+
+    <div class="nav-sep"></div>
+
+    <nav class="nav-links bottom" id="navLinksBottom"></nav>
+  </aside>
+
+  <main class="container">
+    <section class="card">
+      <div class="page-card-head">
+        <h1 class="h1">Suggestions</h1>
+      </div>
+      <div class="row" style="gap:12px; flex-wrap:wrap;">
+        <select id="statusFilter" class="select">
+          <option value="open">À faire</option>
+          <option value="triaged">En cours</option>
+          <option value="done">Terminé</option>
+          <option value="rejected">Rejeté</option>
+          <option value="all">Tous</option>
+        </select>
+        <select id="cabinetFilter" class="select">
+          <option value="">Tous les cabinets</option>
+        </select>
+        <input id="q" class="input" placeholder="Recherche (message, crochet, clé, trousseau)" />
+        <div class="spacer"></div>
+        <div class="badge" id="countBadge">0 suggestion</div>
+      </div>
+
+      <div id="suggestionsList" class="list" style="margin-top:12px;"></div>
+    </section>
+  </main>
+
+  <!-- ===================== MODAL : Éditeur crochet (admin) ===================== -->
+  <div id="editHookOverlay" class="edit-overlay" hidden></div>
+  <section id="editHookModal" class="edit-modal" hidden aria-hidden="true">
+    <div class="hook-modal-head">
+      <div>
+        <div class="title" id="editHookTitle">Éditeur — Crochet #—</div>
+        <div class="muted" id="editHookSub">—</div>
+      </div>
+      <button id="editHookClose" class="btn secondary reactive">Fermer</button>
+    </div>
+
+    <div class="row" style="margin-top:12px;">
+      <button id="editHookAddKey" class="btn">Ajouter une clé</button>
+      <button id="editHookCreateKeyring" class="btn secondary reactive">Créer un trousseau</button>
+      <div class="spacer"></div>
+      <div id="editHookStatus" class="muted"></div>
+    </div>
+
+    <div id="editHookContent" style="margin-top:12px;"></div>
+  </section>
+
+  <!-- ===================== MODAL : Éditer clé ===================== -->
+  <div id="editKeyOverlay" class="edit-overlay" hidden></div>
+  <section id="editKeyModal" class="edit-modal" hidden aria-hidden="true">
+    <div class="hook-modal-head">
+      <div>
+        <div class="title">Éditer clé</div>
+        <div class="muted">Modifier les informations de la clé</div>
+      </div>
+      <button id="editKeyClose" class="btn secondary reactive">Fermer</button>
+    </div>
+    <div class="edit-grid">
+      <label class="field">
+        <div class="muted">No crochet</div>
+        <input id="ek_hook_no" class="input" type="number" min="1" />
+      </label>
+      <label class="field">
+        <div class="muted">No clé</div>
+        <input id="ek_key_no" class="input" />
+      </label>
+      <label class="field">
+        <div class="muted">Local</div>
+        <input id="ek_local" class="input" />
+      </label>
+      <label class="field">
+        <div class="muted">Pavillon</div>
+        <input id="ek_pavillon" class="input" />
+      </label>
+      <label class="field">
+        <div class="muted">Utilisation</div>
+        <input id="ek_utilisation" class="input" />
+      </label>
+      <label class="field">
+        <div class="muted">Remarque</div>
+        <input id="ek_remarque" class="input" />
+      </label>
+    </div>
+    <div class="row" style="margin-top:12px;">
+      <button id="editKeySave" class="btn">Enregistrer</button>
+      <button id="editKeyCancel" class="btn secondary reactive">Annuler</button>
+      <div id="editKeyStatus" class="muted"></div>
+    </div>
+  </section>
+
+  <!-- ===================== MODAL : Éditer trousseau ===================== -->
+  <div id="editRingOverlay" class="edit-overlay" hidden></div>
+  <section id="editRingModal" class="edit-modal" hidden aria-hidden="true">
+    <div class="hook-modal-head">
+      <div>
+        <div class="title">Éditer trousseau</div>
+        <div class="muted" id="editRingHook">—</div>
+      </div>
+      <button id="editRingClose" class="btn secondary reactive">Fermer</button>
+    </div>
+    <div class="edit-grid">
+      <label class="field">
+        <div class="muted">No crochet</div>
+        <input id="er_hook_no" class="input" type="number" min="1" />
+      </label>
+      <label class="field">
+        <div class="muted">Code</div>
+        <input id="er_code" class="input" maxlength="1" />
+      </label>
+      <label class="field">
+        <div class="muted">Nom</div>
+        <input id="er_name" class="input" />
+      </label>
+      <label class="field field-wide" style="grid-column:1/-1;">
+        <div class="muted">Note</div>
+        <input id="er_note" class="input" />
+      </label>
+    </div>
+    <div class="row" style="margin-top:12px;">
+      <button id="editRingSave" class="btn">Enregistrer</button>
+      <button id="editRingCancel" class="btn secondary reactive">Annuler</button>
+      <div id="editRingStatus" class="muted"></div>
+    </div>
+  </section>
+
+  <!-- ===================== MODAL : Créer trousseau ===================== -->
+  <div id="createRingOverlay" class="edit-overlay" hidden></div>
+  <section id="createRingModal" class="edit-modal" hidden aria-hidden="true">
+    <div class="hook-modal-head">
+      <div>
+        <div class="title">Créer un trousseau</div>
+        <div class="muted" id="createRingHook">—</div>
+      </div>
+      <button id="createRingClose" class="btn secondary reactive">Fermer</button>
+    </div>
+    <div class="edit-grid">
+      <label class="field">
+        <div class="muted">Code</div>
+        <input id="cr_code" class="input" maxlength="1" />
+      </label>
+      <label class="field">
+        <div class="muted">Nom</div>
+        <input id="cr_name" class="input" />
+      </label>
+      <label class="field field-wide" style="grid-column:1/-1;">
+        <div class="muted">Note</div>
+        <input id="cr_note" class="input" />
+      </label>
+    </div>
+    <div class="keyring-create-list" id="createRingList"></div>
+    <div class="row" style="margin-top:12px;">
+      <button id="createRingSave" class="btn">Créer</button>
+      <button id="createRingCancel" class="btn secondary reactive">Annuler</button>
+      <div id="createRingStatus" class="muted"></div>
+    </div>
+  </section>
+
+  <!-- ===================== MODAL : Ajouter clé ===================== -->
+  <div id="addKeyOverlay" class="edit-overlay" hidden></div>
+  <section id="addKeyModal" class="edit-modal" hidden aria-hidden="true">
+    <div class="hook-modal-head">
+      <div>
+        <div class="title">Ajouter une clé</div>
+        <div class="muted" id="addKeyHook">—</div>
+      </div>
+      <button id="addKeyClose" class="btn secondary reactive">Fermer</button>
+    </div>
+    <div class="edit-grid">
+      <label class="field">
+        <div class="muted">No clé</div>
+        <input id="ak_key_no" class="input" />
+      </label>
+      <label class="field">
+        <div class="muted">Local</div>
+        <input id="ak_local" class="input" />
+      </label>
+      <label class="field">
+        <div class="muted">Pavillon</div>
+        <input id="ak_pavillon" class="input" />
+      </label>
+      <label class="field">
+        <div class="muted">Utilisation</div>
+        <input id="ak_utilisation" class="input" />
+      </label>
+      <label class="field">
+        <div class="muted">Remarque</div>
+        <input id="ak_remarque" class="input" />
+      </label>
+    </div>
+    <div class="row" style="margin-top:12px;">
+      <button id="addKeySave" class="btn">Ajouter</button>
+      <button id="addKeyCancel" class="btn secondary reactive">Annuler</button>
+      <div id="addKeyStatus" class="muted"></div>
+    </div>
+  </section>
+
+  <!-- ===================== MODAL : Confirmer suppression ===================== -->
+  <div id="confirmOverlay" class="edit-overlay" hidden></div>
+  <section id="confirmModal" class="edit-modal" hidden aria-hidden="true">
+    <div class="hook-modal-head">
+      <div>
+        <div class="title" id="confirmTitle">Confirmer</div>
+        <div class="muted" id="confirmText">—</div>
+      </div>
+      <button id="confirmClose" class="btn secondary reactive">Fermer</button>
+    </div>
+    <div class="row" style="margin-top:12px;">
+      <button id="confirmYes" class="btn danger reactive">Supprimer</button>
+      <button id="confirmNo" class="btn secondary reactive">Annuler</button>
+      <div id="confirmStatus" class="muted"></div>
+    </div>
+  </section>
+
+  <div class="app-version">Version 2.9.6</div>
+
+  <script type="module" src="./suggestions.js?v=20260219c"></script>
+</body>
+</html>
+
+
+
+
+

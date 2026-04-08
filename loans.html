@@ -1,0 +1,121 @@
+﻿<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Gestion clés — Emprunts</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body data-page="loans">
+  <header class="topbar">
+    <a class="topbar-logo" href="./index.html" aria-label="Accueil">
+      <img class="logo-dark" src="./ressources/sesame_logo_dark.png?v=20260216" alt="Sesame" />
+      <img class="logo-light" src="./ressources/sesame_logo_light.png?v=20260216" alt="Sesame" />
+    </a>
+    <div>
+      <h1 class="h1">Emprunts</h1>
+      <div class="muted" id="pageSub">Tous les emprunts</div>
+    </div>
+    <button id="btnBurger" class="burger-btn" aria-label="Menu" aria-expanded="false">
+      <span></span><span></span><span></span>
+      <span id="burgerBadge" class="burger-badge" hidden>0</span>
+    </button>
+  </header>
+
+  <div id="navOverlay" class="nav-overlay" hidden></div>
+  <aside id="navDrawer" class="nav-drawer" aria-hidden="true">
+    <div class="nav-head">
+      <div class="nav-hello" id="navHello">Bonjour —</div>
+      <div class="nav-role" id="navRole">—</div>
+    </div>
+    <div class="nav-sep"></div>
+
+    <nav class="nav-links" id="navLinksTop"></nav>
+
+    <div class="nav-sep"></div>
+
+    <div class="nav-sep"></div>
+
+    <div class="nav-theme">
+      <div class="muted" style="font-size:12px;">Thème</div>
+      <div id="themeSeg" class="seg" role="group" aria-label="Thème">
+        <span class="seg-label">Sombre</span>
+        <button type="button" class="seg-btn" aria-label="Basculer le thème"></button>
+        <span class="seg-label">Claire</span>
+      </div>
+    </div>
+
+    <div class="nav-sep"></div>
+
+    <nav class="nav-links bottom" id="navLinksBottom"></nav>
+  </aside>
+
+  <main class="container">
+    <section class="card">
+      <div class="page-card-head">
+        <h1 class="h1">Emprunts</h1>
+      </div>
+      <div class="tabs config-tabs" style="margin-bottom:12px;">
+        <button id="tabMineBtn" class="tab active" type="button" data-tab="mine">Mes emprunts</button>
+        <button id="tabTeamBtn" class="tab" type="button" data-tab="team">Emprunts de l'équipe</button>
+        <button id="tabMissingBtn" class="tab" type="button" data-tab="missing">Clés disparues</button>
+      </div>
+
+      <div id="tabMine" class="config-tab">
+        <div class="row" style="gap:12px; flex-wrap:wrap;">
+          <select id="statusFilterMine" class="select">
+            <option value="open">En cours</option>
+            <option value="closed">Terminés</option>
+            <option value="all">Tous</option>
+          </select>
+          <select id="cabinetFilterMine" class="select">
+            <option value="">Tous les cabinets</option>
+          </select>
+          <input id="qMine" class="input" placeholder="Recherche (local, no, remarque)" />
+          <div class="spacer"></div>
+          <div class="badge" id="countBadgeMine">0 emprunt</div>
+        </div>
+        <div id="loansListMine" class="list" style="margin-top:12px;"></div>
+      </div>
+
+      <div id="tabTeam" class="config-tab" style="display:none;">
+        <div class="row" style="gap:12px; flex-wrap:wrap;">
+          <select id="statusFilterTeam" class="select">
+            <option value="open">En cours</option>
+            <option value="closed">Terminés</option>
+            <option value="all">Tous</option>
+          </select>
+          <select id="cabinetFilterTeam" class="select">
+            <option value="">Tous les cabinets</option>
+          </select>
+          <input id="qTeam" class="input" placeholder="Recherche (local, no, emprunteur, remarque)" />
+          <div class="spacer"></div>
+          <div class="badge" id="countBadgeTeam">0 emprunt</div>
+        </div>
+        <div id="loansListTeam" class="list" style="margin-top:12px;"></div>
+      </div>
+
+      <div id="tabMissing" class="config-tab" style="display:none;">
+        <div class="row" style="gap:12px; flex-wrap:wrap;">
+          <select id="cabinetFilterMissing" class="select">
+            <option value="">Tous les cabinets</option>
+          </select>
+          <input id="qMissing" class="input" placeholder="Recherche (local, no clé, trousseau, crochet)" />
+          <div class="spacer"></div>
+          <div class="badge bad" id="countBadgeMissing">0 clé disparue</div>
+        </div>
+        <div id="missingList" class="list" style="margin-top:12px;"></div>
+      </div>
+    </section>
+  </main>
+
+  <div class="app-version">Version 2.9.6</div>
+
+  <script type="module" src="./loans.js?v=20260219c"></script>
+</body>
+</html>
+
+
+
+
+
