@@ -1,5 +1,6 @@
 ﻿import { requireSessionOrRedirect, getMyProfile, signOut } from "./auth.js";
 import { supa } from "./supabaseClient.js";
+import { notifyAdminAboutPendingUsers } from "./auth.js";
 import { isPendingApprovalRole, redirectToRoleHome } from "./auth.js";
 import {
   listCabinets,
@@ -281,6 +282,7 @@ async function loadData() {
   }
   try {
     state.pendingUserCount = isAdminRole(state.role) ? await countPendingUsers() : 0;
+    if (isAdminRole(state.role)) notifyAdminAboutPendingUsers(state.pendingUserCount);
   } catch {
     state.pendingUserCount = 0;
   }

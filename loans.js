@@ -1,4 +1,4 @@
-import { requireSessionOrRedirect, getMyProfile, signOut, isPendingApprovalRole, redirectToRoleHome } from "./auth.js";
+import { requireSessionOrRedirect, getMyProfile, signOut, isPendingApprovalRole, redirectToRoleHome, notifyAdminAboutPendingUsers } from "./auth.js";
 import {
   listCabinets,
   listLoansAll,
@@ -269,6 +269,7 @@ async function loadData() {
   }
   try {
     state.pendingUserCount = isAdminRole(state.role) ? await countPendingUsers() : 0;
+    if (isAdminRole(state.role)) notifyAdminAboutPendingUsers(state.pendingUserCount);
   } catch {
     state.pendingUserCount = 0;
   }

@@ -1,6 +1,6 @@
 ﻿import { supa } from "./supabaseClient.js";
 
-import { requireSessionOrRedirect, getMyProfile, signOut, isPendingApprovalRole, redirectToRoleHome } from "./auth.js";
+import { requireSessionOrRedirect, getMyProfile, signOut, isPendingApprovalRole, redirectToRoleHome, notifyAdminAboutPendingUsers } from "./auth.js";
 import { groupByHook, renderHookCard } from "./ui.js";
 import {
   listCabinets,
@@ -2025,6 +2025,7 @@ async function boot() {
     }
     try {
       state.pendingUserCount = await countPendingUsers();
+      notifyAdminAboutPendingUsers(state.pendingUserCount);
     } catch {
       state.pendingUserCount = 0;
     }

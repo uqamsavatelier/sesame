@@ -108,6 +108,25 @@ export async function signOutSilently() {
   await supa.auth.signOut();
 }
 
+const PENDING_USERS_ALERT_KEY = "sav_pending_users_last_seen";
+
+export function notifyAdminAboutPendingUsers(count) {
+  const next = Math.max(0, Number(count) || 0);
+  const previous = Math.max(0, Number(localStorage.getItem(PENDING_USERS_ALERT_KEY) || "0"));
+
+  if (next > previous) {
+    const delta = next - previous;
+    const suffix = delta > 1 ? "s" : "";
+    const totalSuffix = next > 1 ? "s" : "";
+    window.alert(
+      `${delta} nouveau${suffix} compte${suffix} en attente.\n\n` +
+      `Il y a maintenant ${next} utilisateur${totalSuffix} avec le rôle new_user à traiter dans Configuration > Utilisateurs.`
+    );
+  }
+
+  localStorage.setItem(PENDING_USERS_ALERT_KEY, String(next));
+}
+
 export async function getMyProfile() {
   const s = await getSession();
   if (!s?.user?.id) return null;
