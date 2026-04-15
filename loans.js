@@ -60,8 +60,41 @@ function roleLabel(role) {
         : "Utilisateur";
 }
 
+function getModeFromUrl() {
+  const p = new URLSearchParams(location.search);
+  const m = (p.get("mode") || "").toLowerCase();
+  return m === "qr" ? m : "";
+}
+
+function getRestrictedCabinetIdFromUrl() {
+  if (getModeFromUrl() !== "qr") return null;
+  const value = Number(new URLSearchParams(location.search).get("cabinet"));
+  return Number.isFinite(value) ? value : null;
+}
+
+function getRestrictedCabinetLabel() {
+  const cabinetId = getRestrictedCabinetIdFromUrl();
+  const cabinet = state.cabinets.find((row) => Number(row.id) === Number(cabinetId));
+  if (!cabinet) return "Armoire scannée";
+  return cabinet.location ? `${cabinet.name} — ${cabinet.location}` : cabinet.name;
+}
+
 function buildNavLinks(role) {
   const normalizedRole = normalizeRole(role);
+  if (getModeFromUrl() === "qr" && !isAdminRole(normalizedRole)) {
+    const cabinetId = getRestrictedCabinetIdFromUrl();
+    const cabinetHref = Number.isFinite(cabinetId)
+      ? `./index.html?mode=qr&cabinet=${cabinetId}`
+      : "./index.html?mode=qr";
+    const loansHref = Number.isFinite(cabinetId)
+      ? `./my-loans.html?mode=qr&cabinet=${cabinetId}`
+      : "./my-loans.html?mode=qr";
+    return [
+      { label: getRestrictedCabinetLabel(), href: cabinetHref },
+      { label: `Mes emprunts (${Number(state.myOpenLoanCount) || 0})`, href: loansHref },
+      { label: "Déconnexion", action: "logout", danger: true },
+    ];
+  }
   if (normalizedRole === "super_admin") {
     return [
       { label: "Clés", href: "./index.html" },
@@ -282,6 +315,7 @@ async function loadData() {
   bindThemeToggle();
 
   state.cabinets = await listCabinets();
+  renderNav(state.profile, state.role);
   if (state.page === "loans") {
     refillCabinetFilters();
   } else {

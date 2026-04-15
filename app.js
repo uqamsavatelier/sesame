@@ -198,12 +198,23 @@ function canSelfBorrowCabinet(cabinetOrId = state.cabinetId) {
 
 function filterCabinetsForCurrentUser(cabinets) {
   const rows = Array.isArray(cabinets) ? cabinets : [];
-  if (isSuperAdminRole(state.role)) return rows;
-  if (isAdminRole(state.role)) {
+  const restrictedCabinetId = getRestrictedCabinetIdFromUrl();
+  let filtered = rows;
+  if (isSuperAdminRole(state.role)) {
+    filtered = rows;
+  } else if (isAdminRole(state.role)) {
     const currentGroup = getCurrentUserGroup();
-    return rows.filter((cabinet) => normalizeGroup(cabinet.user_group) === currentGroup);
+    filtered = rows.filter((cabinet) => normalizeGroup(cabinet.user_group) === currentGroup);
+  } else {
+    filtered = rows.filter((cabinet) => {
+      if (canConsultCabinet(cabinet)) return true;
+      return Number.isFinite(restrictedCabinetId) && Number(cabinet.id) === Number(restrictedCabinetId);
+    });
   }
-  return rows.filter((cabinet) => canConsultCabinet(cabinet));
+  if (Number.isFinite(restrictedCabinetId)) {
+    return filtered.filter((cabinet) => Number(cabinet.id) === Number(restrictedCabinetId));
+  }
+  return filtered;
 }
 
 function buildCabinetGroupOptionsHtml(selectedGroup = "employe") {
@@ -374,6 +385,22 @@ function closeDrawer() {
 
 function buildNavLinks(role) {
   const normalizedRole = normalizeRole(role);
+  const mode = getModeFromUrl();
+  if (mode === "qr" && !isAdminRole(normalizedRole)) {
+    const cabinetId = getRestrictedCabinetIdFromUrl();
+    const cabinetLabel = getCurrentCabinetLabel() || "Armoire scannée";
+    const cabinetHref = Number.isFinite(cabinetId)
+      ? `./index.html?mode=qr&cabinet=${cabinetId}`
+      : "./index.html?mode=qr";
+    const loansHref = Number.isFinite(cabinetId)
+      ? `./my-loans.html?mode=qr&cabinet=${cabinetId}`
+      : "./my-loans.html?mode=qr";
+    return [
+      { label: cabinetLabel, href: cabinetHref },
+      { label: `Mes emprunts (${Number(state.myOpenLoanCount) || 0})`, href: loansHref },
+      { label: "Déconnexion", action: "logout", danger: true },
+    ];
+  }
   // Tu peux changer les routes plus tard. Pour l'instant: placeholders propres.
   if (isAdminRole(normalizedRole)) {
     const links = [
@@ -844,7 +871,12 @@ function getCabinetFromUrl() {
 function getModeFromUrl() {
   const p = new URLSearchParams(location.search);
   const m = (p.get("mode") || "").toLowerCase();
-  return m === "scan" || m === "browse" ? m : "";
+  return m === "scan" || m === "browse" || m === "qr" ? m : "";
+}
+
+function getRestrictedCabinetIdFromUrl() {
+  if (getModeFromUrl() !== "qr") return null;
+  return getCabinetFromUrl();
 }
 
 function getOpenTargetFromUrl() {
@@ -1286,7 +1318,7 @@ function getCurrentCabinetLabel() {
 }
 
 function applyCabinetMobileLayout(mode) {
-  const compact = mode === "scan" || mode === "browse";
+  const compact = mode === "scan" || mode === "browse" || mode === "qr";
   document.body.classList.toggle("scan-cabinet-view", compact);
 }
 
@@ -1294,7 +1326,7 @@ function updateCabinetHeaderForMode(mode) {
   updateSessionInfoCabinet();
   const label = getCurrentCabinetLabel();
   if (!label) return;
-  if (mode === "scan" || mode === "browse") {
+  if (mode === "scan" || mode === "browse" || mode === "qr") {
     setPageTitle(label);
     return;
   }
@@ -2571,6 +2603,7 @@ $("tabManual").addEventListener("click", () => setTab("manual"));
 
 
   await loadCabinets();
+  renderNav(state.profile, state.role);
   // choisir cabinet depuis URL (ou dernier scan)
   const mode = getModeFromUrl();
   applyCabinetMobileLayout(mode);
@@ -2578,6 +2611,18 @@ $("tabManual").addEventListener("click", () => setTab("manual"));
   if (cabId == null && mode === "scan") {
     const last = Number(localStorage.getItem("sav_last_cabinet"));
     if (Number.isFinite(last)) cabId = last;
+  }
+  if (mode === "qr") {
+    const hasCabinet = Number.isFinite(cabId);
+    const cabinetAllowed = hasCabinet && state.cabinets.some((cabinet) => Number(cabinet.id) === Number(cabId));
+    if (!hasCabinet || !cabinetAllowed) {
+      $("homeView").style.display = "none";
+      $("keysView").style.display = "none";
+      setPageTitle("Armoire introuvable");
+      setSessionInfo(hasCabinet ? "QR invalide ou accès refusé." : "QR incomplet.");
+      document.body.classList.remove("loading");
+      return;
+    }
   }
 
   if (cabId != null) {
@@ -2636,10 +2681,10 @@ $("tabManual").addEventListener("click", () => setTab("manual"));
   $("btnAddCabinet").style.display = isAdminRole(state.role) && canRole("creation") ? "" : "none";
 
   const modeNow = getModeFromUrl();
-  const isUserScan = state.role === "user" && modeNow === "scan";
+  const isRestrictedCabinetMode = modeNow === "qr" || (state.role === "user" && modeNow === "scan");
   const cabinetSelect = $("cabinetSelect");
   if (cabinetSelect) {
-    cabinetSelect.style.display = isUserScan ? "none" : "";
+    cabinetSelect.style.display = isRestrictedCabinetMode ? "none" : "";
   }
 
 
