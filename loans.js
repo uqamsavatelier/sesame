@@ -63,7 +63,7 @@ function roleLabel(role) {
 function getModeFromUrl() {
   const p = new URLSearchParams(location.search);
   const m = (p.get("mode") || "").toLowerCase();
-  return m === "qr" ? m : "";
+  return m === "qr" && p.get("qr") === "1" ? m : "";
 }
 
 function getRestrictedCabinetIdFromUrl() {
@@ -84,11 +84,11 @@ function buildNavLinks(role) {
   if (getModeFromUrl() === "qr" && !isAdminRole(normalizedRole)) {
     const cabinetId = getRestrictedCabinetIdFromUrl();
     const cabinetHref = Number.isFinite(cabinetId)
-      ? `./index.html?mode=qr&cabinet=${cabinetId}`
-      : "./index.html?mode=qr";
+      ? `./index.html?mode=qr&qr=1&cabinet=${cabinetId}`
+      : "./index.html?mode=qr&qr=1";
     const loansHref = Number.isFinite(cabinetId)
-      ? `./my-loans.html?mode=qr&cabinet=${cabinetId}`
-      : "./my-loans.html?mode=qr";
+      ? `./my-loans.html?mode=qr&qr=1&cabinet=${cabinetId}`
+      : "./my-loans.html?mode=qr&qr=1";
     return [
       { label: getRestrictedCabinetLabel(), href: cabinetHref },
       { label: `Mes emprunts (${Number(state.myOpenLoanCount) || 0})`, href: loansHref },

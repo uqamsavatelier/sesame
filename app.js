@@ -390,11 +390,11 @@ function buildNavLinks(role) {
     const cabinetId = getRestrictedCabinetIdFromUrl();
     const cabinetLabel = getCurrentCabinetLabel() || "Armoire scannée";
     const cabinetHref = Number.isFinite(cabinetId)
-      ? `./index.html?mode=qr&cabinet=${cabinetId}`
-      : "./index.html?mode=qr";
+      ? `./index.html?mode=qr&qr=1&cabinet=${cabinetId}`
+      : "./index.html?mode=qr&qr=1";
     const loansHref = Number.isFinite(cabinetId)
-      ? `./my-loans.html?mode=qr&cabinet=${cabinetId}`
-      : "./my-loans.html?mode=qr";
+      ? `./my-loans.html?mode=qr&qr=1&cabinet=${cabinetId}`
+      : "./my-loans.html?mode=qr&qr=1";
     return [
       { label: cabinetLabel, href: cabinetHref },
       { label: `Mes emprunts (${Number(state.myOpenLoanCount) || 0})`, href: loansHref },
@@ -871,7 +871,9 @@ function getCabinetFromUrl() {
 function getModeFromUrl() {
   const p = new URLSearchParams(location.search);
   const m = (p.get("mode") || "").toLowerCase();
-  return m === "scan" || m === "browse" || m === "qr" ? m : "";
+  const isExplicitQr = p.get("qr") === "1";
+  if (m === "qr" && isExplicitQr) return "qr";
+  return m === "scan" || m === "browse" ? m : "";
 }
 
 function getRestrictedCabinetIdFromUrl() {
