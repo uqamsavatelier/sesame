@@ -79,18 +79,73 @@ function getRestrictedCabinetLabel() {
   return cabinet.location ? `${cabinet.name} — ${cabinet.location}` : cabinet.name;
 }
 
+function buildQrCabinetHref(cabinetId) {
+  return Number.isFinite(cabinetId)
+    ? `./index.html?mode=qr&qr=1&cabinet=${cabinetId}`
+    : "./index.html?mode=qr&qr=1";
+}
+
+function buildQrLoansHref(cabinetId) {
+  return Number.isFinite(cabinetId)
+    ? `./my-loans.html?mode=qr&qr=1&cabinet=${cabinetId}`
+    : "./my-loans.html?mode=qr&qr=1";
+}
+
+function syncTopbarLogoLink() {
+  const logo = document.querySelector(".topbar-logo");
+  if (!logo) return;
+  const mode = getModeFromUrl();
+  if (mode === "qr") {
+    logo.setAttribute("href", buildQrCabinetHref(getRestrictedCabinetIdFromUrl()));
+    logo.setAttribute("aria-label", "Retour à l'armoire scannée");
+    return;
+  }
+  logo.setAttribute("href", "./index.html");
+  logo.setAttribute("aria-label", "Accueil");
+}
+
+function applyRestrictedMobileLayout() {
+  document.body.classList.toggle("scan-cabinet-view", getModeFromUrl() === "qr");
+}
+
+let navEventsBound = false;
+
+function bindNavEvents() {
+  if (navEventsBound) return;
+  navEventsBound = true;
+
+  $("btnBurger").addEventListener("click", () => {
+    const isOpen = $("navDrawer").classList.contains("open");
+    isOpen ? closeDrawer() : openDrawer();
+  });
+  $("navOverlay").addEventListener("click", closeDrawer);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeDrawer();
+  });
+
+  function handleNavClick(e) {
+    const a = e.target.closest("a.nav-link");
+    if (!a) return;
+    const action = a.dataset.action || "";
+    if (action === "logout") {
+      e.preventDefault();
+      closeDrawer();
+      signOut();
+      return;
+    }
+    closeDrawer();
+  }
+
+  $("navLinksTop").addEventListener("click", handleNavClick);
+  $("navLinksBottom").addEventListener("click", handleNavClick);
+}
+
 function buildNavLinks(role) {
   const normalizedRole = normalizeRole(role);
   if (getModeFromUrl() === "qr" && !isAdminRole(normalizedRole)) {
     const cabinetId = getRestrictedCabinetIdFromUrl();
-    const cabinetHref = Number.isFinite(cabinetId)
-      ? `./index.html?mode=qr&qr=1&cabinet=${cabinetId}`
-      : "./index.html?mode=qr&qr=1";
-    const loansHref = Number.isFinite(cabinetId)
-      ? `./my-loans.html?mode=qr&qr=1&cabinet=${cabinetId}`
-      : "./my-loans.html?mode=qr&qr=1";
+    const loansHref = buildQrLoansHref(cabinetId);
     return [
-      { label: getRestrictedCabinetLabel(), href: cabinetHref },
       { label: `Mes emprunts (${Number(state.myOpenLoanCount) || 0})`, href: loansHref },
       { label: "Déconnexion", action: "logout", danger: true },
     ];
@@ -168,30 +223,8 @@ function renderNav(profile, role) {
     const action = it.action ?? "";
     return `<a class="${cls}" href="${href}" data-action="${action}">${it.label}</a>`;
   }).join("");
-
-  $("btnBurger").addEventListener("click", () => {
-    const isOpen = $("navDrawer").classList.contains("open");
-    isOpen ? closeDrawer() : openDrawer();
-  });
-  $("navOverlay").addEventListener("click", closeDrawer);
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeDrawer();
-  });
-
-  function handleNavClick(e) {
-    const a = e.target.closest("a.nav-link");
-    if (!a) return;
-    const action = a.dataset.action || "";
-    if (action === "logout") {
-      e.preventDefault();
-      closeDrawer();
-      signOut();
-      return;
-    }
-    closeDrawer();
-  }
-  $("navLinksTop").addEventListener("click", handleNavClick);
-  $("navLinksBottom").addEventListener("click", handleNavClick);
+  syncTopbarLogoLink();
+  bindNavEvents();
 }
 
 function escapeHtml(s) {
@@ -313,6 +346,7 @@ async function loadData() {
 
   renderNav(state.profile, state.role);
   bindThemeToggle();
+  applyRestrictedMobileLayout();
 
   state.cabinets = await listCabinets();
   renderNav(state.profile, state.role);

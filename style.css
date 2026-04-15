@@ -86,12 +86,13 @@ a:hover{ text-decoration:underline; }
   padding: 4px 8px;
   border-radius: 10px;
   pointer-events: auto;
+  max-width: calc(100vw - 132px);
 }
 .topbar-logo img{
   display: block;
   height: 50px;
   width: auto;
-  max-width: min(420px, 72vw);
+  max-width: min(420px, calc(100vw - 132px));
 }
 .topbar .h1{ display: none; }
 .topbar-logo .logo-light{
@@ -494,6 +495,7 @@ body[data-theme="dark"] mark.hl{
   justify-content:center;
   gap:5px;
   position: relative;
+  z-index: 4;
 }
 .burger-btn:hover{ border-color: rgba(79,156,255,.45); }
 .burger-btn span:not(.burger-badge){
@@ -502,6 +504,15 @@ body[data-theme="dark"] mark.hl{
   height:2px;
   background: rgba(255,255,255,.85);
   border-radius: 99px;
+}
+@media (max-width: 720px){
+  .topbar-logo{
+    max-width: calc(100vw - 116px);
+  }
+  .topbar-logo img{
+    height: 42px;
+    max-width: calc(100vw - 116px);
+  }
 }
 .burger-badge{
   position: absolute;
