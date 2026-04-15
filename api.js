@@ -12,6 +12,20 @@ function toIntOrNull(v) {
   return Number.isFinite(n) ? Math.trunc(n) : null;
 }
 
+function normalizeGroup(group) {
+  const raw = String(group ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replaceAll("-", "_")
+    .replace(/\s+/g, "_");
+
+  if (raw === "direction") return "direction";
+  if (raw === "affichage") return "affichage";
+  return "employe";
+}
+
 function keyNoLabel(ref) {
   const keyNo = String(ref?.key_no ?? "").trim();
   if (keyNo) return keyNo;
@@ -128,6 +142,12 @@ async function callFunctionRaw(name, body) {
 export async function listCabinets(options = {}) {
   const includeInactive = !!options?.includeInactive;
   const selects = [
+    "id,name,location,is_active,max_hooks,pavilion_id,user_group,allow_consultation,allow_self_borrow,allow_admin_lending",
+    "id,name,location,is_active,max_hooks,user_group,allow_consultation,allow_self_borrow,allow_admin_lending",
+    "id,name,location,is_active,user_group,allow_consultation,allow_self_borrow,allow_admin_lending",
+    "id,name,location,is_active,max_hooks,pavilion_id,user_group",
+    "id,name,location,is_active,max_hooks,user_group",
+    "id,name,location,is_active,user_group",
     "id,name,location,is_active,max_hooks,pavilion_id",
     "id,name,location,is_active,max_hooks",
     "id,name,location,is_active",
@@ -145,6 +165,10 @@ export async function listCabinets(options = {}) {
         ...c,
         max_hooks: c?.max_hooks ?? null,
         pavilion_id: c?.pavilion_id ?? null,
+        user_group: normalizeGroup(c?.user_group ?? "employe"),
+        allow_consultation: c?.allow_consultation !== false,
+        allow_self_borrow: c?.allow_self_borrow !== false,
+        allow_admin_lending: c?.allow_admin_lending === true,
       }));
     }
     lastError = error;
@@ -160,22 +184,46 @@ export async function createCabinet(payload) {
   const pavilion_id = pavilionRaw == null || String(pavilionRaw).trim() === ""
     ? null
     : Number(pavilionRaw);
+  const user_group = normalizeGroup(payload?.user_group ?? "employe");
+  const allow_consultation = payload?.allow_consultation !== false;
+  const allow_self_borrow = payload?.allow_self_borrow !== false;
+  const allow_admin_lending = payload?.allow_admin_lending === true;
   const max_hooks = Number.isFinite(maxHooksRaw) && maxHooksRaw > 0 ? Math.trunc(maxHooksRaw) : null;
   if (!name) throw new Error("Nom d'armoire requis.");
   if (!max_hooks) throw new Error("Maximum de crochets invalide.");
   if (pavilion_id != null && !Number.isFinite(pavilion_id)) throw new Error("Pavillon invalide.");
 
-  const { data, error } = await supa
+  let result = await supa
     .from("cabinets")
     .insert({
       name,
       location,
-      max_hooks,
-      pavilion_id,
-      is_active: true,
-    })
-    .select("id,name,location,is_active,max_hooks,pavilion_id")
+        max_hooks,
+        pavilion_id,
+        user_group,
+        allow_consultation,
+        allow_self_borrow,
+        allow_admin_lending,
+        is_active: true,
+      })
+    .select("id,name,location,is_active,max_hooks,pavilion_id,user_group,allow_consultation,allow_self_borrow,allow_admin_lending")
     .single();
+
+  if (result.error && /user_group/i.test(String(result.error?.message ?? ""))) {
+    result = await supa
+      .from("cabinets")
+      .insert({
+        name,
+        location,
+        max_hooks,
+        pavilion_id,
+        is_active: true,
+      })
+      .select("id,name,location,is_active,max_hooks,pavilion_id")
+      .single();
+  }
+
+  const { data, error } = result;
 
   if (!error) {
     safeAudit({
@@ -186,7 +234,13 @@ export async function createCabinet(payload) {
       status: "ok",
       source: "frontend",
     });
-    return data;
+    return {
+      ...data,
+      user_group: normalizeGroup(data?.user_group ?? user_group),
+      allow_consultation: data?.allow_consultation ?? allow_consultation,
+      allow_self_borrow: data?.allow_self_borrow ?? allow_self_borrow,
+      allow_admin_lending: data?.allow_admin_lending ?? allow_admin_lending,
+    };
   }
 
   const viaFn = await callFunctionRaw("cabinets-create", {
@@ -194,6 +248,10 @@ export async function createCabinet(payload) {
     location,
     max_hooks,
     pavilion_id,
+    user_group,
+    allow_consultation,
+    allow_self_borrow,
+    allow_admin_lending,
   });
   const created = viaFn?.cabinet ?? viaFn;
   safeAudit({
@@ -204,18 +262,40 @@ export async function createCabinet(payload) {
     status: "ok",
     source: "frontend",
   });
-  return created;
+  return {
+    ...created,
+    user_group: normalizeGroup(created?.user_group ?? user_group),
+    allow_consultation: created?.allow_consultation ?? allow_consultation,
+    allow_self_borrow: created?.allow_self_borrow ?? allow_self_borrow,
+    allow_admin_lending: created?.allow_admin_lending ?? allow_admin_lending,
+  };
 }
 
 export async function updateCabinet(cabinetId, patch) {
   const id = Number(cabinetId);
   if (!Number.isFinite(id)) throw new Error("cabinet_id invalide.");
 
-  const { data: beforeRow, error: beforeErr } = await supa
-    .from("cabinets")
-    .select("id,name,location,is_active,max_hooks,pavilion_id")
-    .eq("id", id)
-    .maybeSingle();
+  let beforeRow = null;
+  let beforeErr = null;
+  for (const selectClause of [
+    "id,name,location,is_active,max_hooks,pavilion_id,user_group,allow_consultation,allow_self_borrow,allow_admin_lending",
+    "id,name,location,is_active,max_hooks,pavilion_id,user_group",
+    "id,name,location,is_active,max_hooks,pavilion_id",
+    "id,name,location,is_active,max_hooks",
+  ]) {
+    const result = await supa
+      .from("cabinets")
+      .select(selectClause)
+      .eq("id", id)
+      .maybeSingle();
+    if (!result.error) {
+      beforeRow = result.data;
+      beforeErr = null;
+      break;
+    }
+    beforeErr = result.error;
+    if (!/user_group|pavilion_id/i.test(String(result.error?.message ?? ""))) break;
+  }
   if (beforeErr) throw beforeErr;
   if (!beforeRow) throw new Error("Armoire introuvable.");
 
@@ -246,6 +326,18 @@ export async function updateCabinet(cabinetId, patch) {
       updates.pavilion_id = Math.trunc(pavilion);
     }
   }
+  if (patch?.user_group !== undefined) {
+    updates.user_group = normalizeGroup(patch.user_group);
+  }
+  if (patch?.allow_consultation !== undefined) {
+    updates.allow_consultation = !!patch.allow_consultation;
+  }
+  if (patch?.allow_self_borrow !== undefined) {
+    updates.allow_self_borrow = !!patch.allow_self_borrow;
+  }
+  if (patch?.allow_admin_lending !== undefined) {
+    updates.allow_admin_lending = !!patch.allow_admin_lending;
+  }
 
   const changed = {};
   for (const [k, v] of Object.entries(updates)) {
@@ -253,7 +345,14 @@ export async function updateCabinet(cabinetId, patch) {
     if (prev !== v) changed[k] = v;
   }
   if (!Object.keys(changed).length) {
-    return { ...beforeRow, pavilion_id: beforeRow?.pavilion_id ?? null };
+    return {
+      ...beforeRow,
+      pavilion_id: beforeRow?.pavilion_id ?? null,
+      user_group: normalizeGroup(beforeRow?.user_group ?? "employe"),
+      allow_consultation: beforeRow?.allow_consultation !== false,
+      allow_self_borrow: beforeRow?.allow_self_borrow !== false,
+      allow_admin_lending: beforeRow?.allow_admin_lending === true,
+    };
   }
 
   let writeUpdates = { ...changed };
@@ -261,7 +360,7 @@ export async function updateCabinet(cabinetId, patch) {
     .from("cabinets")
     .update(writeUpdates)
     .eq("id", id)
-    .select("id,name,location,is_active,max_hooks,pavilion_id")
+    .select("id,name,location,is_active,max_hooks,pavilion_id,user_group,allow_consultation,allow_self_borrow,allow_admin_lending")
     .single();
 
   if (result.error && /pavilion_id/i.test(String(result.error.message ?? "")) && "pavilion_id" in writeUpdates) {
@@ -271,6 +370,52 @@ export async function updateCabinet(cabinetId, patch) {
       .update(writeUpdates)
       .eq("id", id)
       .select("id,name,location,is_active,max_hooks")
+      .single();
+  }
+
+  if (result.error && /user_group/i.test(String(result.error.message ?? "")) && "user_group" in writeUpdates) {
+    delete writeUpdates.user_group;
+    if (!Object.keys(writeUpdates).length) {
+      return {
+        ...beforeRow,
+        pavilion_id: beforeRow?.pavilion_id ?? null,
+        user_group: normalizeGroup(beforeRow?.user_group ?? "employe"),
+        allow_consultation: beforeRow?.allow_consultation !== false,
+        allow_self_borrow: beforeRow?.allow_self_borrow !== false,
+        allow_admin_lending: beforeRow?.allow_admin_lending === true,
+      };
+    }
+    result = await supa
+      .from("cabinets")
+      .update(writeUpdates)
+      .eq("id", id)
+      .select("id,name,location,is_active,max_hooks,pavilion_id")
+      .single();
+  }
+
+  if (
+    result.error
+    && /allow_consultation|allow_self_borrow|allow_admin_lending/i.test(String(result.error.message ?? ""))
+    && ("allow_consultation" in writeUpdates || "allow_self_borrow" in writeUpdates || "allow_admin_lending" in writeUpdates)
+  ) {
+    delete writeUpdates.allow_consultation;
+    delete writeUpdates.allow_self_borrow;
+    delete writeUpdates.allow_admin_lending;
+    if (!Object.keys(writeUpdates).length) {
+      return {
+        ...beforeRow,
+        pavilion_id: beforeRow?.pavilion_id ?? null,
+        user_group: normalizeGroup(beforeRow?.user_group ?? "employe"),
+        allow_consultation: beforeRow?.allow_consultation !== false,
+        allow_self_borrow: beforeRow?.allow_self_borrow !== false,
+        allow_admin_lending: beforeRow?.allow_admin_lending === true,
+      };
+    }
+    result = await supa
+      .from("cabinets")
+      .update(writeUpdates)
+      .eq("id", id)
+      .select("id,name,location,is_active,max_hooks,pavilion_id,user_group")
       .single();
   }
 
@@ -285,7 +430,14 @@ export async function updateCabinet(cabinetId, patch) {
     status: "ok",
     source: "frontend",
   });
-  return { ...data, pavilion_id: data?.pavilion_id ?? null };
+  return {
+    ...data,
+    pavilion_id: data?.pavilion_id ?? null,
+    user_group: normalizeGroup(data?.user_group ?? beforeRow?.user_group ?? "employe"),
+    allow_consultation: data?.allow_consultation ?? beforeRow?.allow_consultation ?? true,
+    allow_self_borrow: data?.allow_self_borrow ?? beforeRow?.allow_self_borrow ?? true,
+    allow_admin_lending: data?.allow_admin_lending ?? beforeRow?.allow_admin_lending ?? false,
+  };
 }
 
 export async function getCabinetUsage(cabinetId) {
@@ -361,32 +513,74 @@ export async function listKeyringsByCabinet(cabinetId) {
 
 export async function listOpenLoansByKeyIds(keyIds) {
   if (!keyIds.length) return [];
-  const { data, error } = await supa
-    .from("loans")
-    .select("id,key_id,borrower_id,loaned_at,returned_at,note")
-    .in("key_id", keyIds)
-    .is("returned_at", null);
+  let data = null;
+  let error = null;
+  for (const selectClause of [
+    "id,key_id,borrower_id,borrower_name,loaned_at,returned_at,note",
+    "id,key_id,borrower_id,loaned_at,returned_at,note",
+  ]) {
+    const result = await supa
+      .from("loans")
+      .select(selectClause)
+      .in("key_id", keyIds)
+      .is("returned_at", null);
+    if (!result.error) {
+      data = result.data;
+      error = null;
+      break;
+    }
+    error = result.error;
+    if (!/borrower_name/i.test(String(result.error?.message ?? ""))) break;
+  }
   if (error) throw error;
   return data ?? [];
 }
 
 export async function listProfilesByIds(ids) {
   if (!ids.length) return [];
-  const { data, error } = await supa
-    .from("user_profiles")
-    .select("id,display_name,role")
-    .in("id", ids);
+  let data = null;
+  let error = null;
+  for (const selectClause of ["id,display_name,role,user_group", "id,display_name,role"]) {
+    const result = await supa
+      .from("user_profiles")
+      .select(selectClause)
+      .in("id", ids);
+    if (!result.error) {
+      data = result.data;
+      error = null;
+      break;
+    }
+    error = result.error;
+    if (!/user_group/i.test(String(result.error?.message ?? ""))) break;
+  }
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map((row) => ({
+    ...row,
+    user_group: normalizeGroup(row?.user_group ?? "employe"),
+  }));
 }
 
 export async function listUserProfiles() {
-  const { data, error } = await supa
-    .from("user_profiles")
-    .select("id,display_name,role")
-    .order("display_name", { ascending: true });
+  let data = null;
+  let error = null;
+  for (const selectClause of ["id,display_name,role,user_group", "id,display_name,role"]) {
+    const result = await supa
+      .from("user_profiles")
+      .select(selectClause)
+      .order("display_name", { ascending: true });
+    if (!result.error) {
+      data = result.data;
+      error = null;
+      break;
+    }
+    error = result.error;
+    if (!/user_group/i.test(String(result.error?.message ?? ""))) break;
+  }
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map((row) => ({
+    ...row,
+    user_group: normalizeGroup(row?.user_group ?? "employe"),
+  }));
 }
 
 export async function countPendingUsers() {
@@ -398,23 +592,37 @@ export async function countPendingUsers() {
   return Number(count) || 0;
 }
 
-export async function updateUserProfileRole(userId, role) {
-  const { data, error } = await supa
+export async function updateUserProfileAccess(userId, role, userGroup) {
+  let result = await supa
     .from("user_profiles")
-    .update({ role })
+    .update({ role, user_group: normalizeGroup(userGroup ?? "employe") })
     .eq("id", userId)
-    .select("id,display_name,role")
+    .select("id,display_name,role,user_group")
     .single();
+
+  if (result.error && /user_group/i.test(String(result.error?.message ?? ""))) {
+    result = await supa
+      .from("user_profiles")
+      .update({ role })
+      .eq("id", userId)
+      .select("id,display_name,role")
+      .single();
+  }
+
+  const { data, error } = result;
   if (error) throw error;
   safeAudit({
     event_type: "role_update",
     action: "role_update",
     target: data?.display_name || String(userId),
-    details: `role -> ${role}`,
+    details: `role -> ${role}; group -> ${normalizeGroup(data?.user_group ?? userGroup ?? "employe")}`,
     status: "ok",
     source: "frontend",
   });
-  return data;
+  return {
+    ...data,
+    user_group: normalizeGroup(data?.user_group ?? userGroup ?? "employe"),
+  };
 }
 
 export async function listMissingByKeyIds(keyIds) {
@@ -429,20 +637,48 @@ export async function listMissingByKeyIds(keyIds) {
 }
 
 export async function listLoansAll() {
-  const { data, error } = await supa
-    .from("loans")
-    .select("id,key_id,borrower_id,loaned_at,returned_at,note")
-    .order("loaned_at", { ascending: false });
+  let data = null;
+  let error = null;
+  for (const selectClause of [
+    "id,key_id,borrower_id,borrower_name,loaned_at,returned_at,note",
+    "id,key_id,borrower_id,loaned_at,returned_at,note",
+  ]) {
+    const result = await supa
+      .from("loans")
+      .select(selectClause)
+      .order("loaned_at", { ascending: false });
+    if (!result.error) {
+      data = result.data;
+      error = null;
+      break;
+    }
+    error = result.error;
+    if (!/borrower_name/i.test(String(result.error?.message ?? ""))) break;
+  }
   if (error) throw error;
   return data ?? [];
 }
 
 export async function listLoansByBorrower(borrowerId) {
-  const { data, error } = await supa
-    .from("loans")
-    .select("id,key_id,borrower_id,loaned_at,returned_at,note")
-    .eq("borrower_id", borrowerId)
-    .order("loaned_at", { ascending: false });
+  let data = null;
+  let error = null;
+  for (const selectClause of [
+    "id,key_id,borrower_id,borrower_name,loaned_at,returned_at,note",
+    "id,key_id,borrower_id,loaned_at,returned_at,note",
+  ]) {
+    const result = await supa
+      .from("loans")
+      .select(selectClause)
+      .eq("borrower_id", borrowerId)
+      .order("loaned_at", { ascending: false });
+    if (!result.error) {
+      data = result.data;
+      error = null;
+      break;
+    }
+    error = result.error;
+    if (!/borrower_name/i.test(String(result.error?.message ?? ""))) break;
+  }
   if (error) throw error;
   return data ?? [];
 }
@@ -545,6 +781,47 @@ export async function fnLoanCreateKeyring(cabinet_id, hook_no, ring_code, note =
     source: "frontend",
   });
   return out;
+}
+
+export async function rpcAdminCreateLoan({ key_id, borrower_id = null, borrower_name = null, note = null }) {
+  const { data, error } = await supa.rpc("admin_create_loan", {
+    p_key_id: Number(key_id),
+    p_borrower_id: borrower_id || null,
+    p_borrower_name: borrower_name || null,
+    p_note: note || null,
+  });
+  if (error) throw error;
+  const ref = await getKeyRefById(key_id);
+  safeAudit({
+    event_type: "loan_create",
+    action: "loan_create",
+    target: ref ? formatKeyTarget(ref) : `key:?/?/${key_id}`,
+    details: "Prêt administrateur",
+    status: "ok",
+    source: "frontend",
+  });
+  return data;
+}
+
+export async function rpcAdminCreateKeyringLoan({ cabinet_id, hook_no, ring_code, borrower_id = null, borrower_name = null, note = null }) {
+  const { data, error } = await supa.rpc("admin_create_keyring_loan", {
+    p_cabinet_id: Number(cabinet_id),
+    p_hook_no: Number(hook_no),
+    p_ring_code: String(ring_code ?? "").toUpperCase(),
+    p_borrower_id: borrower_id || null,
+    p_borrower_name: borrower_name || null,
+    p_note: note || null,
+  });
+  if (error) throw error;
+  safeAudit({
+    event_type: "loan_create",
+    action: "loan_create",
+    target: formatKeyringTarget({ cabinet_id, hook_no, ring_code }),
+    details: "Prêt administrateur",
+    status: "ok",
+    source: "frontend",
+  });
+  return data;
 }
 
 export async function fnLoanReturnKeyring(cabinet_id, hook_no, ring_code) {

@@ -192,6 +192,10 @@ function statusClass(l) {
   return l.returned_at ? "badge ok" : "badge warn";
 }
 
+function loanBorrowerLabel(loan) {
+  return state.borrowersById.get(loan?.borrower_id) || loan?.borrower_name || loan?.borrower_id || "—";
+}
+
 const state = {
   page: document.body.dataset.page || "loans",
   profile: null,
@@ -337,7 +341,7 @@ function filterLoans(mode) {
     if (cab && key?.cabinet_id != null && String(key.cabinet_id) !== cab) return false;
 
     if (!q) return true;
-    const borrower = state.borrowersById.get(l.borrower_id) || "";
+    const borrower = loanBorrowerLabel(l);
     const ring = key?.keyring_id ? state.keyringsById.get(key.keyring_id) : null;
     const ringLabel = ring ? `trousseau ${ring.ring_code ?? ""} ${ring.name ?? ""}` : "";
     const hay = [
@@ -368,7 +372,7 @@ function renderLoansList(mode) {
   const canReturn = mode === "mine";
   $(listId).innerHTML = list.map((l) => {
     const key = state.keysById.get(l.key_id);
-    const borrower = state.borrowersById.get(l.borrower_id) || l.borrower_id || "—";
+    const borrower = loanBorrowerLabel(l);
     const hookNo = key?.hook_no ?? "—";
     const keyLabel = key ? formatKey(key) : "Clé supprimée";
     const local = key?.local ?? "—";

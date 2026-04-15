@@ -13,6 +13,20 @@ function normalizeRole(role) {
   return "new_user";
 }
 
+function normalizeGroup(group) {
+  const raw = String(group ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replaceAll("-", "_")
+    .replace(/\s+/g, "_");
+
+  if (raw === "direction") return "direction";
+  if (raw === "affichage") return "affichage";
+  return "employe";
+}
+
 function defaultDisplayNameForUser(user) {
   const metadataName = String(user?.user_metadata?.display_name ?? "").trim();
   if (metadataName) return metadataName;
@@ -26,6 +40,7 @@ function buildProfileFromUser(user, profile = null) {
     id: profile?.id ?? user?.id ?? null,
     display_name: profile?.display_name ?? defaultDisplayNameForUser(user),
     role: normalizeRole(profile?.role ?? user?.user_metadata?.role ?? "new_user"),
+    user_group: normalizeGroup(profile?.user_group ?? user?.user_metadata?.user_group ?? "employe"),
   };
 }
 
@@ -72,6 +87,7 @@ export async function signUp(displayName, email, password, emailRedirectTo = "")
       data: {
         display_name: String(displayName ?? "").trim(),
         role: "new_user",
+        user_group: "employe",
       },
     },
   });
@@ -131,26 +147,52 @@ export async function getMyProfile() {
   const s = await getSession();
   if (!s?.user?.id) return null;
 
-  const { data, error } = await supa
-    .from("user_profiles")
-    .select("id, display_name, role")
-    .eq("id", s.user.id)
-    .maybeSingle();
+  let data = null;
+  let error = null;
+  for (const selectClause of ["id, display_name, role, user_group", "id, display_name, role"]) {
+    const result = await supa
+      .from("user_profiles")
+      .select(selectClause)
+      .eq("id", s.user.id)
+      .maybeSingle();
+    if (!result.error) {
+      data = result.data;
+      error = null;
+      break;
+    }
+    error = result.error;
+    if (!/user_group/i.test(String(result.error?.message ?? ""))) break;
+  }
 
   if (error) throw error;
   if (data) return buildProfileFromUser(s.user, data);
 
   const fallbackProfile = buildProfileFromUser(s.user);
   try {
-    const { data: created, error: createError } = await supa
+    let result = await supa
       .from("user_profiles")
       .upsert({
         id: s.user.id,
         display_name: fallbackProfile.display_name,
         role: "new_user",
+        user_group: fallbackProfile.user_group,
       }, { onConflict: "id" })
-      .select("id, display_name, role")
+      .select("id, display_name, role, user_group")
       .single();
+
+    if (result.error && /user_group/i.test(String(result.error?.message ?? ""))) {
+      result = await supa
+        .from("user_profiles")
+        .upsert({
+          id: s.user.id,
+          display_name: fallbackProfile.display_name,
+          role: "new_user",
+        }, { onConflict: "id" })
+        .select("id, display_name, role")
+        .single();
+    }
+
+    const { data: created, error: createError } = result;
 
     if (createError) throw createError;
     return buildProfileFromUser(s.user, created);
