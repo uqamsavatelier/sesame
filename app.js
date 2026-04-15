@@ -1,6 +1,6 @@
 ﻿import { supa } from "./supabaseClient.js";
 
-import { requireSessionOrRedirect, getMyProfile, signOut, isPendingApprovalRole, redirectToRoleHome, notifyAdminAboutPendingUsers } from "./auth.js?v=20260415f";
+import { requireSessionOrRedirect, getMyProfile, signOut, isPendingApprovalRole, redirectToRoleHome, notifyAdminAboutPendingUsers } from "./auth.js?v=20260415g";
 import { groupByHook, renderHookCard } from "./ui.js";
 import {
   listCabinets,
@@ -898,7 +898,8 @@ function getCabinetFromUrl() {
 function getModeFromUrl() {
   const p = new URLSearchParams(location.search);
   const m = (p.get("mode") || "").toLowerCase();
-  const hasCabinet = Number.isFinite(Number(p.get("cabinet")));
+  const cabinetValue = p.get("cabinet");
+  const hasCabinet = cabinetValue != null && String(cabinetValue).trim() !== "" && Number.isFinite(Number(cabinetValue));
   if (m === "qr" && hasCabinet) return "qr";
   return m === "scan" || m === "browse" ? m : "";
 }

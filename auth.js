@@ -61,6 +61,13 @@ function normalizeSafeAppRoute(target) {
   }
 }
 
+function parseCabinetId(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const cabinetId = Number(raw);
+  return Number.isFinite(cabinetId) ? cabinetId : null;
+}
+
 const RETURN_TO_STORAGE_KEY = "sav_return_to_after_login";
 const RETURN_TO_FALLBACK_STORAGE_KEY = "sav_return_to_after_login_persist";
 const QR_LOGIN_CABINET_STORAGE_KEY = "sav_qr_login_cabinet";
@@ -72,8 +79,8 @@ function extractQrRoute(target) {
   try {
     const resolved = new URL(safeTarget, window.location.origin);
     const mode = (resolved.searchParams.get("mode") || "").toLowerCase();
-    const cabinetId = Number(resolved.searchParams.get("cabinet"));
-    if (mode !== "qr" || !Number.isFinite(cabinetId)) return "";
+    const cabinetId = parseCabinetId(resolved.searchParams.get("cabinet"));
+    if (mode !== "qr" || cabinetId == null) return "";
     const route = new URL("./index.html", resolved);
     route.searchParams.set("mode", "qr");
     route.searchParams.set("cabinet", String(cabinetId));
@@ -88,8 +95,8 @@ function savePendingQrCabinetFromTarget(target) {
   if (!qrRoute) return null;
   try {
     const qrUrl = new URL(qrRoute, window.location.origin);
-    const cabinetId = Number(qrUrl.searchParams.get("cabinet"));
-    if (!Number.isFinite(cabinetId)) return null;
+    const cabinetId = parseCabinetId(qrUrl.searchParams.get("cabinet"));
+    if (cabinetId == null) return null;
     localStorage.setItem(QR_LOGIN_CABINET_STORAGE_KEY, String(cabinetId));
     return cabinetId;
   } catch {
@@ -99,8 +106,7 @@ function savePendingQrCabinetFromTarget(target) {
 
 export function getPendingQrCabinetId() {
   try {
-    const value = Number(localStorage.getItem(QR_LOGIN_CABINET_STORAGE_KEY));
-    return Number.isFinite(value) ? value : null;
+    return parseCabinetId(localStorage.getItem(QR_LOGIN_CABINET_STORAGE_KEY));
   } catch {
     return null;
   }
@@ -169,8 +175,8 @@ export function getReturnToFromUrl() {
     return fromQuery;
   }
   const qrMode = (params.get("mode") || "").toLowerCase();
-  const qrCabinetId = Number(params.get("cabinet"));
-  if (qrMode === "qr" && Number.isFinite(qrCabinetId)) {
+  const qrCabinetId = parseCabinetId(params.get("cabinet"));
+  if (qrMode === "qr" && qrCabinetId != null) {
     const qrRoute = normalizeSafeAppRoute(`./index.html?mode=qr&cabinet=${qrCabinetId}`);
     if (qrRoute) {
       savePendingReturnTo(qrRoute);

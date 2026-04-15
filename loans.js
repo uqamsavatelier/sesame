@@ -1,4 +1,4 @@
-import { requireSessionOrRedirect, getMyProfile, signOut, isPendingApprovalRole, redirectToRoleHome, notifyAdminAboutPendingUsers } from "./auth.js?v=20260415f";
+import { requireSessionOrRedirect, getMyProfile, signOut, isPendingApprovalRole, redirectToRoleHome, notifyAdminAboutPendingUsers } from "./auth.js?v=20260415g";
 import {
   listCabinets,
   listLoansAll,
@@ -63,12 +63,15 @@ function roleLabel(role) {
 function getModeFromUrl() {
   const p = new URLSearchParams(location.search);
   const m = (p.get("mode") || "").toLowerCase();
-  return m === "qr" && Number.isFinite(Number(p.get("cabinet"))) ? m : "";
+  const cabinetValue = p.get("cabinet");
+  return m === "qr" && cabinetValue != null && String(cabinetValue).trim() !== "" && Number.isFinite(Number(cabinetValue)) ? m : "";
 }
 
 function getRestrictedCabinetIdFromUrl() {
   if (getModeFromUrl() !== "qr") return null;
-  const value = Number(new URLSearchParams(location.search).get("cabinet"));
+  const raw = new URLSearchParams(location.search).get("cabinet");
+  if (raw == null || String(raw).trim() === "") return null;
+  const value = Number(raw);
   return Number.isFinite(value) ? value : null;
 }
 

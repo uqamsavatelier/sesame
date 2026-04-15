@@ -8,7 +8,7 @@ import {
   getReturnToFromUrl,
   getPendingQrCabinetId,
   clearPendingQrCabinetId,
-} from "./auth.js?v=20260415f";
+} from "./auth.js?v=20260415g";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks } from "./audit.js";
 import { APP_LOGIN_URL } from "./supabaseClient.js";
 
@@ -30,15 +30,20 @@ function setSignupPanelOpen(open) {
   document.body.dataset.theme = t;
 })();
 
+function parseCabinetId(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const cabinetId = Number(raw);
+  return Number.isFinite(cabinetId) ? cabinetId : null;
+}
+
 function getDirectQrTarget() {
   const params = new URLSearchParams(window.location.search);
   const mode = (params.get("mode") || "").toLowerCase();
-  const cabinetFromQuery = Number(params.get("cabinet"));
-  const cabinetId = Number.isFinite(cabinetFromQuery) ? cabinetFromQuery : getPendingQrCabinetId();
-  if (mode !== "qr" && !Number.isFinite(cabinetFromQuery)) {
-    if (!Number.isFinite(cabinetId)) return "";
-  }
-  return Number.isFinite(cabinetId) ? `./index.html?mode=qr&cabinet=${cabinetId}` : "";
+  const cabinetFromQuery = parseCabinetId(params.get("cabinet"));
+  const cabinetId = cabinetFromQuery ?? getPendingQrCabinetId();
+  if (mode !== "qr" && cabinetFromQuery == null && cabinetId == null) return "";
+  return cabinetId != null ? `./index.html?mode=qr&cabinet=${cabinetId}` : "";
 }
 
 function redirectAfterLogin(role) {
