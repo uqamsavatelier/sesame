@@ -9,6 +9,7 @@ import {
   listKeyringsByCabinet,
   listOpenLoansByKeyIds,
   listProfilesByIds,
+  listUserProfiles,
   listMissingByKeyIds,
   fnLoanCreateKeyring,
   fnLoanReturnKeyring,
@@ -24,7 +25,9 @@ import {
   deleteCabinet,
   countOpenSuggestions,
   countPendingUsers,
-  countOpenLoansByBorrower
+  countOpenLoansByBorrower,
+  rpcAdminCreateLoan,
+  rpcAdminCreateKeyringLoan,
 } from "./api.js";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks, logAuditEvent } from "./audit.js";
 
@@ -167,11 +170,40 @@ function canAdministrateCurrentCabinet() {
   return canAdministrateCabinet(state.cabinetId);
 }
 
+function getCabinetPolicy(cabinetOrId = state.cabinetId) {
+  const cabinet = typeof cabinetOrId === "object" && cabinetOrId
+    ? cabinetOrId
+    : state.cabinets.find((row) => Number(row.id) === Number(cabinetOrId));
+  return {
+    allow_consultation: cabinet?.allow_consultation !== false,
+    allow_self_borrow: cabinet?.allow_self_borrow !== false,
+    allow_admin_lending: cabinet?.allow_admin_lending === true,
+  };
+}
+
+function canConsultCabinet(cabinetOrId) {
+  if (canAdministrateCabinet(cabinetOrId)) return true;
+  return getCabinetPolicy(cabinetOrId).allow_consultation;
+}
+
+function canAdminLendCabinet(cabinetOrId = state.cabinetId) {
+  return canAdministrateCabinet(cabinetOrId)
+    && getCabinetPolicy(cabinetOrId).allow_admin_lending
+    && canRole("emprunt");
+}
+
+function canSelfBorrowCabinet(cabinetOrId = state.cabinetId) {
+  return getCabinetPolicy(cabinetOrId).allow_self_borrow && canRole("emprunt");
+}
+
 function filterCabinetsForCurrentUser(cabinets) {
   const rows = Array.isArray(cabinets) ? cabinets : [];
-  if (isSuperAdminRole(state.role) || !isAdminRole(state.role)) return rows;
-  const currentGroup = getCurrentUserGroup();
-  return rows.filter((cabinet) => normalizeGroup(cabinet.user_group) === currentGroup);
+  if (isSuperAdminRole(state.role)) return rows;
+  if (isAdminRole(state.role)) {
+    const currentGroup = getCurrentUserGroup();
+    return rows.filter((cabinet) => normalizeGroup(cabinet.user_group) === currentGroup);
+  }
+  return rows.filter((cabinet) => canConsultCabinet(cabinet));
 }
 
 function buildCabinetGroupOptionsHtml(selectedGroup = "employe") {
@@ -192,6 +224,34 @@ function syncCabinetGroupInputs(selectedGroup = "employe") {
     select.value = forcedGroup;
     select.disabled = !isSuperAdminRole(state.role);
   }
+}
+
+function syncCabinetAvailabilityInputs(options = {}) {
+  const values = {
+    allow_consultation: options?.allow_consultation !== false,
+    allow_self_borrow: options?.allow_self_borrow !== false,
+    allow_admin_lending: options?.allow_admin_lending === true,
+  };
+  const isEditable = isSuperAdminRole(state.role);
+  const pairs = [
+    ["cab_create_allow_consultation", values.allow_consultation],
+    ["cab_create_allow_self_borrow", values.allow_self_borrow],
+    ["cab_create_allow_admin_lending", values.allow_admin_lending],
+    ["cab_edit_allow_consultation", values.allow_consultation],
+    ["cab_edit_allow_self_borrow", values.allow_self_borrow],
+    ["cab_edit_allow_admin_lending", values.allow_admin_lending],
+  ];
+  for (const [id, checked] of pairs) {
+    const input = $(id);
+    if (!input) continue;
+    input.checked = !!checked;
+    input.disabled = !isEditable;
+  }
+}
+
+function loanBorrowerLabel(loan) {
+  if (!loan) return "—";
+  return state.borrowersById?.get(loan.borrower_id) || loan.borrower_name || loan.borrower_id || "—";
 }
 
 const ROLE_ACTION_KEYS = [
@@ -403,7 +463,7 @@ function renderHookExistingDetails(hookNo) {
 
   const rows = keys.map((k) => {
     const loan = state.loansByKey?.get(k.id);
-    const borrowerName = loan ? (state.borrowersById?.get(loan.borrower_id) || loan.borrower_id || "—") : "";
+    const borrowerName = loan ? loanBorrowerLabel(loan) : "";
     const loanText = loan ? `Empruntée (${borrowerName})` : "Disponible";
     const stateText = k.is_missing ? "Disparue" : loanText;
     return `
@@ -756,6 +816,13 @@ let state = {
     loanedAt: null,
     step: 1, // 1 = question retour, 2 = choisir retour/emprunt
   },
+  adminLoanModal: {
+    open: false,
+    mode: "key",
+    keyId: null,
+    keyringId: null,
+  },
+  adminLoanUsers: [],
   openTargetHandled: false,
   suggestionCount: 0,
   pendingUserCount: 0,
@@ -975,6 +1042,9 @@ function renderCabinetGrid() {
       metaParts.push(`max ${Math.trunc(Number(c.max_hooks))} crochets`);
     }
     metaParts.push(`Groupe ${groupLabel(c.user_group)}`);
+    if (c.allow_consultation !== false) metaParts.push("Consultation");
+    if (c.allow_self_borrow !== false) metaParts.push("Emprunts");
+    if (c.allow_admin_lending === true) metaParts.push("Prêts admin");
     return `
       <div class="cabinet-card ${c.is_active === false ? "inactive" : ""}" data-cabinet-id="${c.id}">
         <div class="cabinet-card-head">
@@ -1062,7 +1132,11 @@ async function openCabinetEditModal(cabinetId) {
     : "";
   $("cab_edit_pavilion_id").innerHTML = buildPavilionOptionsHtml(cab.pavilion_id ?? null);
   syncCabinetGroupInputs(cab.user_group);
+  syncCabinetAvailabilityInputs(cab);
   $("cab_edit_user_group").value = normalizeGroup(cab.user_group);
+  $("cab_edit_allow_consultation").checked = cab.allow_consultation !== false;
+  $("cab_edit_allow_self_borrow").checked = cab.allow_self_borrow !== false;
+  $("cab_edit_allow_admin_lending").checked = cab.allow_admin_lending === true;
   $("cab_edit_is_active").value = cab.is_active === false ? "false" : "true";
   $("cabEditStatus").textContent = "";
   $("cabinetEditOverlay").hidden = false;
@@ -1086,6 +1160,11 @@ function openCabinetCreateModal() {
   $("cab_create_max_hooks").value = "";
   $("cab_create_pavilion_id").innerHTML = buildPavilionOptionsHtml(null);
   syncCabinetGroupInputs(getCurrentUserGroup());
+  syncCabinetAvailabilityInputs({
+    allow_consultation: true,
+    allow_self_borrow: true,
+    allow_admin_lending: false,
+  });
   $("cab_create_user_group").value = getCurrentUserGroup();
   $("cabCreateStatus").textContent = "";
   $("cabinetCreateOverlay").hidden = false;
@@ -1409,10 +1488,12 @@ function renderHookModal(hookNo) {
   const canCreate = canRole("creation");
   const canMove = canRole("deplacement");
   const canAdminCurrentCabinet = canAdministrateCurrentCabinet();
+  const canAdminLendCurrentCabinet = canAdminLendCabinet();
+  const canSelfBorrowCurrentCabinet = canSelfBorrowCabinet();
   const canAdminActions = canAdminCurrentCabinet && (canCreate || canMove || canEdit || canDelete);
   $("hookModalActions").style.display = (canAdminActions || canSuggest) ? "flex" : "none";
   const btnBorrowAll = $("hookBorrowAll");
-  if (btnBorrowAll) btnBorrowAll.style.display = canBorrow ? "" : "none";
+  if (btnBorrowAll) btnBorrowAll.style.display = canSelfBorrowCurrentCabinet ? "" : "none";
   const btnReturnAll = $("hookReturnAll");
   if (btnReturnAll) btnReturnAll.style.display = canReturn ? "" : "none";
   const btnAddKey = $("hookAddKey");
@@ -1426,16 +1507,17 @@ function renderHookModal(hookNo) {
     const loan = state.loansByKey?.get(k.id);
     const statusClass = k.is_missing ? "kpill missing" : (loan ? "kpill onloan" : "kpill");
     const role = state.role;
-    const borrowerName = loan ? (state.borrowersById?.get(loan.borrower_id) || loan.borrower_id || "—") : "";
+    const borrowerName = loan ? loanBorrowerLabel(loan) : "";
     const loanLine = loan ? `Emprunté par: ${escapeHtml(borrowerName)} le ${escapeHtml(formatDateFr(loan.loaned_at))}` : "";
     const missInfo = state.missingByKey?.get(k.id);
     const missName = missInfo?.reported_by_name || "—";
     const missDate = missInfo?.reported_at ? formatDateFr(missInfo.reported_at) : "";
     const missLine = missInfo ? `Disparue, signalement de ${escapeHtml(missName)} le ${escapeHtml(missDate)}` : "";
-    const toggleAction = loan ? "key-return" : "key-borrow";
-    const toggleLabel = loan ? "Retourner" : "Emprunter";
+    const wantsAdminLoan = !loan && canAdminLendCurrentCabinet;
+    const toggleAction = loan ? "key-return" : (wantsAdminLoan ? "key-admin-loan" : "key-borrow");
+    const toggleLabel = loan ? "Retourner" : (wantsAdminLoan ? "Prêter" : "Emprunter");
     const toggleDisabledReason = (!loan && k.is_missing)
-      ? "Impossible d'emprunter la clé ! Clé signalée disparue."
+      ? `Impossible de ${wantsAdminLoan ? "prêter" : "emprunter"} la clé ! Clé signalée disparue.`
       : "";
     const toggleBtnClass = `btn reactive${toggleDisabledReason ? " is-disabled" : ""}`;
     const toggleAttrs = toggleDisabledReason
@@ -1455,10 +1537,10 @@ function renderHookModal(hookNo) {
           ${loan && showLoanLine ? `<div class="muted">${loanLine}</div>` : ""}
           ${k.is_missing && missLine && !k.keyring_id ? `<div class="muted">${missLine}</div>` : ""}
         </div>
-        ${(canBorrow || canReturn || canSignal || (canAdminCurrentCabinet && (canEdit || canDelete))) ? `
+        ${(canSelfBorrowCurrentCabinet || canReturn || canSignal || canAdminLendCurrentCabinet || (canAdminCurrentCabinet && (canEdit || canDelete))) ? `
           <div class="key-actions">
-            ${(showLoanToggle && ((loan && canReturn) || (!loan && canBorrow))) ? `
-              <button class="${toggleBtnClass} ${toggleAction === "key-borrow" ? "btn-borrow" : "btn-return"}" data-action="${toggleAction}" data-key-id="${k.id}" ${loanIdAttr} ${toggleAttrs}>${toggleLabel}</button>
+            ${(showLoanToggle && ((loan && canReturn) || (!loan && (canSelfBorrowCurrentCabinet || canAdminLendCurrentCabinet)))) ? `
+              <button class="${toggleBtnClass} ${toggleAction === "key-return" ? "btn-return" : "btn-borrow"}" data-action="${toggleAction}" data-key-id="${k.id}" ${loanIdAttr} ${toggleAttrs}>${toggleLabel}</button>
             ` : ""}
             ${canSignal ? `<button class="btn secondary reactive btn-missing" data-action="${k.is_missing ? "key-found" : "key-missing"}" data-key-id="${k.id}">
               ${k.is_missing ? "Signalée retrouvée" : "Signaler disparue"}
@@ -1493,10 +1575,11 @@ function renderHookModal(hookNo) {
   for (const kr of keyringsForHook) {
     const hasMissing = kr.keys.some(k => k.state === "missing");
     const hasOnLoan = kr.keys.some(k => k.state === "onloan");
-    const toggleAction = hasOnLoan ? "keyring-return" : "keyring-borrow";
-    const toggleLabel = hasOnLoan ? "Retourner" : "Emprunter";
+    const wantsAdminLoan = !hasOnLoan && canAdminLendCurrentCabinet;
+    const toggleAction = hasOnLoan ? "keyring-return" : (wantsAdminLoan ? "keyring-admin-loan" : "keyring-borrow");
+    const toggleLabel = hasOnLoan ? "Retourner" : (wantsAdminLoan ? "Prêter" : "Emprunter");
     const toggleDisabledReason = (!hasOnLoan && hasMissing)
-      ? "Impossible d'emprunter le trousseau ! Une clé est signalée disparue."
+      ? `Impossible de ${wantsAdminLoan ? "prêter" : "emprunter"} le trousseau ! Une clé est signalée disparue.`
       : "";
     const toggleBtnClass = `btn reactive${toggleDisabledReason ? " is-disabled" : ""}`;
     const toggleAttrs = toggleDisabledReason
@@ -1509,7 +1592,7 @@ function renderHookModal(hookNo) {
     const ringLoans = keyringKeys
       .map(k => state.loansByKey?.get(k.id))
       .filter(Boolean);
-    const ringBorrowers = [...new Set(ringLoans.map(l => state.borrowersById?.get(l.borrower_id) || l.borrower_id || "—"))];
+    const ringBorrowers = [...new Set(ringLoans.map((loan) => loanBorrowerLabel(loan)))];
     const ringLoanLine = ringLoans.length
       ? (ringBorrowers.length === 1
           ? `Emprunté par: ${escapeHtml(ringBorrowers[0])} le ${escapeHtml(formatDateFr(ringLoans[0].loaned_at))}`
@@ -1527,10 +1610,10 @@ function renderHookModal(hookNo) {
             </div>
             ${ringLoanLine ? `<div class="muted keyring-loan">${ringLoanLine}</div>` : ""}
           </div>
-          ${((canBorrow || canReturn) || (canAdminCurrentCabinet && (canEdit || canDelete))) ? `
+          ${((canSelfBorrowCurrentCabinet || canReturn || canAdminLendCurrentCabinet) || (canAdminCurrentCabinet && (canEdit || canDelete))) ? `
             <div class="key-actions keyring-actions">
-              ${((hasOnLoan && canReturn) || (!hasOnLoan && canBorrow)) ? `
-                <button class="${toggleBtnClass} ${toggleAction === "keyring-borrow" ? "btn-borrow" : "btn-return"}" data-action="${toggleAction}" data-keyring-id="${kr.id}" ${toggleAttrs}>${toggleLabel}</button>
+              ${((hasOnLoan && canReturn) || (!hasOnLoan && (canSelfBorrowCurrentCabinet || canAdminLendCurrentCabinet))) ? `
+                <button class="${toggleBtnClass} ${toggleAction === "keyring-return" ? "btn-return" : "btn-borrow"}" data-action="${toggleAction}" data-keyring-id="${kr.id}" ${toggleAttrs}>${toggleLabel}</button>
               ` : ""}
               ${canAdminCurrentCabinet && canEdit ? `
                 <button class="btn secondary icon-btn reactive btn-edit" data-action="keyring-edit" data-keyring-id="${kr.id}" title="éditer">✎</button>
@@ -1669,6 +1752,15 @@ function setProposalModalOpen(open) {
 function setReturnPromptOpen(open) {
   const overlay = $("returnPromptOverlay");
   const modal = $("returnPromptModal");
+  if (!overlay || !modal) return;
+  overlay.hidden = !open;
+  modal.hidden = !open;
+  modal.setAttribute("aria-hidden", open ? "false" : "true");
+}
+
+function setAdminLoanModalOpen(open) {
+  const overlay = $("adminLoanOverlay");
+  const modal = $("adminLoanModal");
   if (!overlay || !modal) return;
   overlay.hidden = !open;
   modal.hidden = !open;
@@ -1964,6 +2056,65 @@ function closeReturnPrompt() {
   setReturnPromptOpen(false);
 }
 
+function buildAdminLoanUsersOptions(cabinet = null) {
+  const currentCabinet = cabinet || state.cabinets.find((row) => Number(row.id) === Number(state.cabinetId));
+  const targetGroup = normalizeGroup(currentCabinet?.user_group ?? getCurrentUserGroup());
+  const users = state.adminLoanUsers
+    .filter((user) => normalizeRole(user.role) !== "new_user")
+    .filter((user) => isSuperAdminRole(state.role) || normalizeGroup(user.user_group) === targetGroup)
+    .sort((a, b) => String(a.display_name ?? "").localeCompare(String(b.display_name ?? ""), "fr-CA"));
+
+  return [
+    `<option value="">Choisir un utilisateur</option>`,
+    ...users.map((user) => `<option value="${escapeHtml(String(user.id))}">${escapeHtml(`${user.display_name || "Sans nom"} — ${groupLabel(user.user_group)}`)}</option>`),
+  ].join("");
+}
+
+async function ensureAdminLoanUsersLoaded() {
+  if (state.adminLoanUsers.length) return;
+  state.adminLoanUsers = await listUserProfiles();
+}
+
+async function openAdminLoanModal({ mode, keyId = null, keyringId = null } = {}) {
+  if (!canAdminLendCabinet()) return;
+  await ensureAdminLoanUsersLoaded();
+  state.adminLoanModal.open = true;
+  state.adminLoanModal.mode = mode === "keyring" ? "keyring" : "key";
+  state.adminLoanModal.keyId = Number.isFinite(Number(keyId)) ? Number(keyId) : null;
+  state.adminLoanModal.keyringId = Number.isFinite(Number(keyringId)) ? Number(keyringId) : null;
+
+  const text = $("adminLoanText");
+  if (text) {
+    if (state.adminLoanModal.mode === "keyring") {
+      const keyring = state.keyrings.find((row) => Number(row.id) === Number(state.adminLoanModal.keyringId));
+      text.textContent = keyring
+        ? `Trousseau ${keyring.ring_code ?? "A"}${keyring.name ? ` (${keyring.name})` : ""}`
+        : "Prêter ce trousseau";
+    } else {
+      const key = state.keys.find((row) => Number(row.id) === Number(state.adminLoanModal.keyId));
+      text.textContent = key
+        ? `${formatKeyTag(key)}${key.local ? ` — ${key.local}` : ""}`
+        : "Prêter cette clé";
+    }
+  }
+
+  $("adminLoanBorrowerSelect").innerHTML = buildAdminLoanUsersOptions();
+  $("adminLoanBorrowerSelect").value = "";
+  $("adminLoanBorrowerCustom").value = "";
+  $("adminLoanNote").value = "";
+  $("adminLoanStatus").textContent = "";
+  setAdminLoanModalOpen(true);
+}
+
+function closeAdminLoanModal() {
+  state.adminLoanModal.open = false;
+  state.adminLoanModal.mode = "key";
+  state.adminLoanModal.keyId = null;
+  state.adminLoanModal.keyringId = null;
+  $("adminLoanStatus").textContent = "";
+  setAdminLoanModalOpen(false);
+}
+
 async function refreshAfterAction() {
   await loadDataForCabinet();
   render();
@@ -2217,6 +2368,15 @@ renderHookExistingDetails(Number($("m_hook").value));
     const userGroup = isSuperAdminRole(state.role)
       ? normalizeGroup($("cab_create_user_group").value)
       : getCurrentUserGroup();
+    const allowConsultation = isSuperAdminRole(state.role)
+      ? !!$("cab_create_allow_consultation").checked
+      : true;
+    const allowSelfBorrow = isSuperAdminRole(state.role)
+      ? !!$("cab_create_allow_self_borrow").checked
+      : true;
+    const allowAdminLending = isSuperAdminRole(state.role)
+      ? !!$("cab_create_allow_admin_lending").checked
+      : false;
 
     if (!name) {
       $("cabCreateStatus").textContent = "Nom d'armoire requis.";
@@ -2240,6 +2400,9 @@ renderHookExistingDetails(Number($("m_hook").value));
         max_hooks: Math.trunc(maxHooks),
         pavilion_id: pavilionId,
         user_group: userGroup,
+        allow_consultation: allowConsultation,
+        allow_self_borrow: allowSelfBorrow,
+        allow_admin_lending: allowAdminLending,
       });
       await loadCabinets();
       renderCabinetGrid();
@@ -2267,6 +2430,15 @@ renderHookExistingDetails(Number($("m_hook").value));
     const userGroup = isSuperAdminRole(state.role)
       ? normalizeGroup($("cab_edit_user_group").value)
       : getCurrentUserGroup();
+    const allowConsultation = isSuperAdminRole(state.role)
+      ? !!$("cab_edit_allow_consultation").checked
+      : getCabinetPolicy(cabinetId).allow_consultation;
+    const allowSelfBorrow = isSuperAdminRole(state.role)
+      ? !!$("cab_edit_allow_self_borrow").checked
+      : getCabinetPolicy(cabinetId).allow_self_borrow;
+    const allowAdminLending = isSuperAdminRole(state.role)
+      ? !!$("cab_edit_allow_admin_lending").checked
+      : getCabinetPolicy(cabinetId).allow_admin_lending;
 
     if (!name) {
       $("cabEditStatus").textContent = "Nom d'armoire requis.";
@@ -2291,6 +2463,9 @@ renderHookExistingDetails(Number($("m_hook").value));
         max_hooks: Math.trunc(maxHooks),
         pavilion_id: pavilionId,
         user_group: userGroup,
+        allow_consultation: allowConsultation,
+        allow_self_borrow: allowSelfBorrow,
+        allow_admin_lending: allowAdminLending,
       });
       await loadCabinets();
       renderCabinetGrid();
@@ -2747,7 +2922,7 @@ $("m_is_keyring").addEventListener("change", (e) => {
       btn.disabled = true;
 
       if (action === "keyring-borrow") {
-        if (!canRole("emprunt")) throw new Error("Permission refusée: emprunt.");
+        if (!canSelfBorrowCabinet()) throw new Error("Permission refusée: emprunt.");
         const kr = state.keyrings.find(k => k.id === keyringId);
         if (!kr) throw new Error("Trousseau introuvable.");
         await fnLoanCreateKeyring(
@@ -2756,6 +2931,9 @@ $("m_is_keyring").addEventListener("change", (e) => {
           String(kr.ring_code ?? "").toUpperCase(),
           kr.note ?? null,
         );
+      } else if (action === "keyring-admin-loan") {
+        if (!canAdminLendCabinet()) throw new Error("Permission refusée: prêt administrateur.");
+        await openAdminLoanModal({ mode: "keyring", keyringId });
       } else if (action === "keyring-return") {
         if (!canRole("retour")) throw new Error("Permission refusée: retour.");
         const kr = state.keyrings.find(k => k.id === keyringId);
@@ -2790,13 +2968,16 @@ $("m_is_keyring").addEventListener("change", (e) => {
           source: "frontend",
         });
       } else if (action === "key-borrow") {
-        if (!canRole("emprunt")) throw new Error("Permission refusée: emprunt.");
+        if (!canSelfBorrowCabinet()) throw new Error("Permission refusée: emprunt.");
         await fnLoanCreate(keyId);
+      } else if (action === "key-admin-loan") {
+        if (!canAdminLendCabinet()) throw new Error("Permission refusée: prêt administrateur.");
+        await openAdminLoanModal({ mode: "key", keyId });
       } else if (action === "key-return") {
         if (!canRole("retour")) throw new Error("Permission refusée: retour.");
         const loan = state.loansByKey?.get(keyId);
         if (loan && state.profile?.id && loan.borrower_id !== state.profile.id) {
-          const borrowerName = state.borrowersById?.get(loan.borrower_id) || loan.borrower_id || "—";
+          const borrowerName = loanBorrowerLabel(loan);
           openReturnPrompt({
             keyId,
             loanId: loan.id,
@@ -2815,7 +2996,7 @@ $("m_is_keyring").addEventListener("change", (e) => {
           if (isForbiddenError(err)) {
             const fallbackLoan = state.loansByKey?.get(keyId);
             if (fallbackLoan) {
-              const borrowerName = state.borrowersById?.get(fallbackLoan.borrower_id) || fallbackLoan.borrower_id || "—";
+              const borrowerName = loanBorrowerLabel(fallbackLoan);
               openReturnPrompt({
                 keyId,
                 loanId: fallbackLoan.id,
@@ -2835,7 +3016,7 @@ $("m_is_keyring").addEventListener("change", (e) => {
           const ringKeys = state.keys.filter(k => Number(k.keyring_id) === Number(key.keyring_id));
           const ringLoan = ringKeys.map(k => state.loansByKey?.get(k.id)).find(Boolean);
           if (ringLoan) {
-            const borrowerName = state.borrowersById?.get(ringLoan.borrower_id) || ringLoan.borrower_id || "—";
+            const borrowerName = loanBorrowerLabel(ringLoan);
             const text = `Le trousseau est emprunté par ${borrowerName} le ${formatDateFr(ringLoan.loaned_at)}. Est-ce que ce trousseau est de retour mais la clé est manquante ?`;
             openMissingPrompt({
               keyId,
@@ -2848,7 +3029,7 @@ $("m_is_keyring").addEventListener("change", (e) => {
         } else {
           const loan = state.loansByKey?.get(keyId);
           if (loan) {
-            const borrowerName = state.borrowersById?.get(loan.borrower_id) || loan.borrower_id || "—";
+            const borrowerName = loanBorrowerLabel(loan);
             const text = `La clé est empruntée par ${borrowerName} le ${formatDateFr(loan.loaned_at)}. Avez-vous contacté ${borrowerName} pour savoir si la clé est perdue ?`;
             openMissingPrompt({
               keyId,
@@ -2889,6 +3070,7 @@ $("m_is_keyring").addEventListener("change", (e) => {
   });
 
   $("hookBorrowAll").addEventListener("click", async () => {
+    if (!canSelfBorrowCabinet()) return;
     if (state.hookModal.hookNo == null) return;
     const { keyringsForHook, singles } = getHookDetail(state.hookModal.hookNo);
     try {
@@ -3319,11 +3501,24 @@ $("m_is_keyring").addEventListener("change", (e) => {
         source: "frontend",
       });
       if (ringHasOnLoan) {
+        const ringLoan = state.keys
+          .filter((key) => Number(key.keyring_id) === Number(ringId))
+          .map((key) => state.loansByKey?.get(key.id))
+          .find(Boolean);
         for (const keyId of selectedWithout) {
           const key = state.keys.find(k => k.id === keyId);
           if (!key || key.is_missing) continue;
           try {
-            await fnLoanCreate(keyId);
+            if (ringLoan && canAdminLendCabinet() && (ringLoan.borrower_id || ringLoan.borrower_name)) {
+              await rpcAdminCreateLoan({
+                key_id: keyId,
+                borrower_id: ringLoan.borrower_id ?? null,
+                borrower_name: ringLoan.borrower_id ? null : ringLoan.borrower_name,
+                note: ringLoan.note ?? null,
+              });
+            } else {
+              await fnLoanCreate(keyId);
+            }
           } catch (e) {
             console.warn("loan-create failed for key", keyId, e);
           }
@@ -3580,9 +3775,14 @@ $("m_is_keyring").addEventListener("change", (e) => {
       } else {
         await fnLoanReturnAny({ key_id: keyId });
       }
-      await fnLoanCreate(keyId);
-      await refreshAfterAction();
       closeReturnPrompt();
+      await refreshAfterAction();
+      if (canAdminLendCabinet()) {
+        await openAdminLoanModal({ mode: "key", keyId });
+      } else {
+        await fnLoanCreate(keyId);
+        await refreshAfterAction();
+      }
     } catch (e) {
       const msg = e?.message ?? String(e);
       if (isForbiddenError(e)) {
@@ -3593,6 +3793,52 @@ $("m_is_keyring").addEventListener("change", (e) => {
     } finally {
       $("returnPromptReturn").disabled = false;
       $("returnPromptBorrow").disabled = false;
+    }
+  });
+
+  $("adminLoanClose").addEventListener("click", closeAdminLoanModal);
+  $("adminLoanCancel").addEventListener("click", closeAdminLoanModal);
+  $("adminLoanOverlay").addEventListener("click", closeAdminLoanModal);
+  $("adminLoanSave").addEventListener("click", async () => {
+    try {
+      const borrowerId = String($("adminLoanBorrowerSelect").value || "").trim();
+      const borrowerName = String($("adminLoanBorrowerCustom").value || "").trim();
+      const note = String($("adminLoanNote").value || "").trim();
+      if (!borrowerId && !borrowerName) {
+        $("adminLoanStatus").textContent = "Choisis un utilisateur ou saisis un nom.";
+        return;
+      }
+
+      $("adminLoanSave").disabled = true;
+      $("adminLoanStatus").textContent = "Prêt en cours...";
+
+      if (state.adminLoanModal.mode === "keyring") {
+        const keyring = state.keyrings.find((row) => Number(row.id) === Number(state.adminLoanModal.keyringId));
+        if (!keyring) throw new Error("Trousseau introuvable.");
+        await rpcAdminCreateKeyringLoan({
+          cabinet_id: keyring.cabinet_id,
+          hook_no: keyring.hook_no,
+          ring_code: keyring.ring_code,
+          borrower_id: borrowerId || null,
+          borrower_name: borrowerId ? null : borrowerName,
+          note,
+        });
+      } else {
+        if (!Number.isFinite(Number(state.adminLoanModal.keyId))) throw new Error("Clé introuvable.");
+        await rpcAdminCreateLoan({
+          key_id: state.adminLoanModal.keyId,
+          borrower_id: borrowerId || null,
+          borrower_name: borrowerId ? null : borrowerName,
+          note,
+        });
+      }
+
+      await refreshAfterAction();
+      closeAdminLoanModal();
+    } catch (e) {
+      $("adminLoanStatus").textContent = `Erreur: ${e?.message ?? e}`;
+    } finally {
+      $("adminLoanSave").disabled = false;
     }
   });
 

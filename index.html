@@ -139,6 +139,23 @@
       <div class="muted">Groupe</div>
       <select id="cab_edit_user_group" class="select"></select>
     </label>
+    <div class="field" style="grid-column:1 / -1;">
+      <div class="muted" style="margin-bottom:6px;">Disponible pour</div>
+      <div class="row" style="gap:18px; flex-wrap:wrap;">
+        <label class="row" style="gap:8px;">
+          <input id="cab_edit_allow_consultation" type="checkbox" />
+          <span>Consultation</span>
+        </label>
+        <label class="row" style="gap:8px;">
+          <input id="cab_edit_allow_self_borrow" type="checkbox" />
+          <span>Emprunts</span>
+        </label>
+        <label class="row" style="gap:8px;">
+          <input id="cab_edit_allow_admin_lending" type="checkbox" />
+          <span>Prêts par l'administrateur</span>
+        </label>
+      </div>
+    </div>
     <label class="field">
       <div class="muted">En fonction</div>
       <select id="cab_edit_is_active" class="select">
@@ -190,6 +207,23 @@
       <div class="muted">Groupe</div>
       <select id="cab_create_user_group" class="select"></select>
     </label>
+    <div class="field" style="grid-column:1 / -1;">
+      <div class="muted" style="margin-bottom:6px;">Disponible pour</div>
+      <div class="row" style="gap:18px; flex-wrap:wrap;">
+        <label class="row" style="gap:8px;">
+          <input id="cab_create_allow_consultation" type="checkbox" checked />
+          <span>Consultation</span>
+        </label>
+        <label class="row" style="gap:8px;">
+          <input id="cab_create_allow_self_borrow" type="checkbox" checked />
+          <span>Emprunts</span>
+        </label>
+        <label class="row" style="gap:8px;">
+          <input id="cab_create_allow_admin_lending" type="checkbox" />
+          <span>Prêts par l'administrateur</span>
+        </label>
+      </div>
+    </div>
   </div>
 
   <div class="row" style="margin-top:12px;">
@@ -632,9 +666,43 @@
   <div id="returnPromptStatus" class="muted" style="margin-top:8px;"></div>
 </section>
 
+<!-- ===================== MODAL : Prêt administrateur ===================== -->
+<div id="adminLoanOverlay" class="edit-overlay" hidden></div>
+
+<section id="adminLoanModal" class="edit-modal" hidden aria-hidden="true">
+  <div class="hook-modal-head">
+    <div>
+      <div class="title">Prêt par l'administrateur</div>
+      <div class="muted" id="adminLoanText">—</div>
+    </div>
+    <button id="adminLoanClose" class="btn secondary reactive">Fermer</button>
+  </div>
+
+  <div style="margin-top:10px;">
+    <div class="muted" style="margin-bottom:6px;">Utilisateur existant</div>
+    <select id="adminLoanBorrowerSelect" class="select" style="width:100%;"></select>
+  </div>
+
+  <div style="margin-top:10px;">
+    <div class="muted" style="margin-bottom:6px;">Ou saisir un nom libre</div>
+    <input id="adminLoanBorrowerCustom" class="input" placeholder="Nom de la personne qui emprunte" />
+  </div>
+
+  <div style="margin-top:10px;">
+    <div class="muted" style="margin-bottom:6px;">Note facultative</div>
+    <textarea id="adminLoanNote" class="input" style="width:100%; min-height:90px;" placeholder="Ajouter un contexte au besoin"></textarea>
+  </div>
+
+  <div class="row" style="margin-top:12px;">
+    <button id="adminLoanSave" class="btn reactive">Prêter</button>
+    <button id="adminLoanCancel" class="btn secondary reactive">Annuler</button>
+    <div id="adminLoanStatus" class="muted"></div>
+  </div>
+</section>
+
   <div class="app-version"></div>
 
-<script type="module" src="./app.js?v=20260414a"></script>
+<script type="module" src="./app.js?v=20260415b"></script>
 <script type="module" src="./version.js?v=20260415a"></script>
 </body>
 </html>
