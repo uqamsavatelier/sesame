@@ -385,14 +385,14 @@ function closeDrawer() {
 
 function buildQrCabinetHref(cabinetId) {
   return Number.isFinite(cabinetId)
-    ? `./index.html?mode=qr&qr=1&cabinet=${cabinetId}`
-    : "./index.html?mode=qr&qr=1";
+    ? `./index.html?mode=qr&cabinet=${cabinetId}`
+    : "./index.html?mode=qr";
 }
 
 function buildQrLoansHref(cabinetId) {
   return Number.isFinite(cabinetId)
-    ? `./my-loans.html?mode=qr&qr=1&cabinet=${cabinetId}`
-    : "./my-loans.html?mode=qr&qr=1";
+    ? `./my-loans.html?mode=qr&cabinet=${cabinetId}`
+    : "./my-loans.html?mode=qr";
 }
 
 function syncTopbarLogoLink() {
@@ -448,8 +448,13 @@ function buildNavLinks(role) {
   const mode = getModeFromUrl();
   if (mode === "qr" && !isAdminRole(normalizedRole)) {
     const cabinetId = getRestrictedCabinetIdFromUrl();
+    const cabinet = state.cabinets.find((row) => Number(row.id) === Number(cabinetId));
+    const cabinetLabel = cabinet
+      ? (cabinet.location ? `${cabinet.name} - ${cabinet.location}` : cabinet.name)
+      : "Armoire scannée";
     return [
-      { label: `Mes emprunts (${Number(state.myOpenLoanCount) || 0})`, href: buildQrLoansHref(cabinetId) },
+      { label: cabinetLabel, href: buildQrCabinetHref(cabinetId) },
+      { label: "Mes emprunts", href: buildQrLoansHref(cabinetId) },
       { label: "Déconnexion", action: "logout", danger: true },
     ];
   }
@@ -893,8 +898,8 @@ function getCabinetFromUrl() {
 function getModeFromUrl() {
   const p = new URLSearchParams(location.search);
   const m = (p.get("mode") || "").toLowerCase();
-  const isExplicitQr = p.get("qr") === "1";
-  if (m === "qr" && isExplicitQr) return "qr";
+  const hasCabinet = Number.isFinite(Number(p.get("cabinet")));
+  if (m === "qr" && hasCabinet) return "qr";
   return m === "scan" || m === "browse" ? m : "";
 }
 
@@ -2701,10 +2706,11 @@ $("tabManual").addEventListener("click", () => setTab("manual"));
 
   // --- Admin panel (après role connu) ---
   const adminPanel = $("adminPanel");
-  $("btnAddKeys").style.display = canAdministrateCurrentCabinet() && canRole("creation") ? "" : "none";
-  $("btnAddCabinet").style.display = isAdminRole(state.role) && canRole("creation") ? "" : "none";
-
   const modeNow = getModeFromUrl();
+  $("btnAddKeys").style.display = modeNow === "qr"
+    ? "none"
+    : (canAdministrateCurrentCabinet() && canRole("creation") ? "" : "none");
+  $("btnAddCabinet").style.display = isAdminRole(state.role) && canRole("creation") ? "" : "none";
   const isRestrictedCabinetMode = modeNow === "qr" || (state.role === "user" && modeNow === "scan");
   const cabinetSelect = $("cabinetSelect");
   if (cabinetSelect) {
