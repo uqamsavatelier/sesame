@@ -255,7 +255,7 @@
     <p class="muted">Colonnes attendues : tag,key_no,pavillon,local,utilisation,departement,quantite,remarque</p>
 
     <div class="row" style="gap:10px; flex-wrap:wrap;">
-      <input id="csvFile" type="file" accept=".csv,text/csv" />
+      <input id="csvFile" type="file" accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xls,application/vnd.ms-excel" />
       <button id="btnPreviewCsv" class="btn">Prévisualiser</button>
       <button id="btnImportCsv" class="btn" disabled>Importer</button>
     </div>
@@ -702,7 +702,8 @@
 
   <div class="app-version"></div>
 
-<script type="module" src="./app.js?v=20260415b"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script type="module" src="./app.js?v=20260415c"></script>
 <script type="module" src="./version.js?v=20260415a"></script>
 </body>
 </html>

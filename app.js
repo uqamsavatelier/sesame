@@ -998,6 +998,48 @@ function parseCsv(text) {
   return { header, rows };
 }
 
+function isExcelFile(file) {
+  const name = String(file?.name ?? "").toLowerCase();
+  return name.endsWith(".xlsx") || name.endsWith(".xls");
+}
+
+async function parseExcelFile(file) {
+  if (!window.XLSX) {
+    throw new Error("Le module Excel n'est pas chargé. Recharge la page et réessaie.");
+  }
+
+  const buffer = await file.arrayBuffer();
+  const workbook = window.XLSX.read(buffer, { type: "array" });
+  const firstSheetName = workbook.SheetNames.find((name) => !!workbook.Sheets?.[name]);
+  if (!firstSheetName) {
+    return { header: [], rows: [], sourceLabel: "Excel" };
+  }
+
+  const sheet = workbook.Sheets[firstSheetName];
+  const rows = window.XLSX.utils.sheet_to_json(sheet, {
+    defval: "",
+    raw: false,
+  });
+  const header = rows.length ? Object.keys(rows[0]) : [];
+  return {
+    header,
+    rows: rows.map((row) => Object.fromEntries(
+      Object.entries(row).map(([key, value]) => [String(key).trim(), String(value ?? "").trim()])
+    )),
+    sourceLabel: `Excel (${firstSheetName})`,
+  };
+}
+
+async function parseImportFile(file) {
+  if (isExcelFile(file)) return await parseExcelFile(file);
+  const text = await file.text();
+  const parsed = parseCsv(text);
+  return {
+    ...parsed,
+    sourceLabel: "CSV",
+  };
+}
+
 
 function renderPreview(container, rows, max = 25) {
   const shown = rows.slice(0, max);
@@ -2607,12 +2649,11 @@ $("tabManual").addEventListener("click", () => setTab("manual"));
   $("btnPreviewCsv").addEventListener("click", async () => {
     const f = $("csvFile").files?.[0];
     if (!f) {
-      $("csvStatus").textContent = "Choisis un fichier CSV.";
+      $("csvStatus").textContent = "Choisis un fichier CSV ou Excel.";
       return;
     }
 
-    const text = await f.text();
-    const { header, rows } = parseCsv(text);
+    const { header, rows, sourceLabel } = await parseImportFile(f);
 
     const missing = validateCsvHeader(header);
     if (missing.length) {
@@ -2624,7 +2665,7 @@ $("tabManual").addEventListener("click", () => setTab("manual"));
     }
 
     csvRows = rows;
-    $("csvStatus").textContent = `CSV OK — ${rows.length} lignes prêtes.`;
+    $("csvStatus").textContent = `${sourceLabel} OK — ${rows.length} lignes prêtes.`;
     renderPreview($("csvPreview"), rows);
     $("btnImportCsv").disabled = rows.length === 0;
   });
