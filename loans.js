@@ -1,4 +1,4 @@
-import { requireSessionOrRedirect, getMyProfile, signOut, isPendingApprovalRole, redirectToRoleHome, notifyAdminAboutPendingUsers } from "./auth.js?v=20260415d";
+import { requireSessionOrRedirect, getMyProfile, signOut, isPendingApprovalRole, redirectToRoleHome, notifyAdminAboutPendingUsers } from "./auth.js?v=20260415e";
 import {
   listCabinets,
   listLoansAll,

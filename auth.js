@@ -64,6 +64,24 @@ function normalizeSafeAppRoute(target) {
 const RETURN_TO_STORAGE_KEY = "sav_return_to_after_login";
 const RETURN_TO_FALLBACK_STORAGE_KEY = "sav_return_to_after_login_persist";
 
+function extractQrRoute(target) {
+  const safeTarget = normalizeSafeAppRoute(target);
+  if (!safeTarget) return "";
+
+  try {
+    const resolved = new URL(safeTarget, window.location.origin);
+    const mode = (resolved.searchParams.get("mode") || "").toLowerCase();
+    const cabinetId = Number(resolved.searchParams.get("cabinet"));
+    if (mode !== "qr" || !Number.isFinite(cabinetId)) return "";
+    const route = new URL("./index.html", resolved);
+    route.searchParams.set("mode", "qr");
+    route.searchParams.set("cabinet", String(cabinetId));
+    return `${route.pathname}${route.search}${route.hash}`;
+  } catch {
+    return "";
+  }
+}
+
 function savePendingReturnTo(target) {
   const safeTarget = normalizeSafeAppRoute(target);
   if (!safeTarget) return "";
@@ -101,6 +119,12 @@ function buildLoginRoute(returnTo = "") {
   const loginUrl = new URL("./login.html", window.location.href);
   const safeReturnTo = savePendingReturnTo(returnTo);
   if (safeReturnTo) loginUrl.searchParams.set("returnTo", safeReturnTo);
+  const qrRoute = extractQrRoute(safeReturnTo);
+  if (qrRoute) {
+    const qrUrl = new URL(qrRoute, window.location.origin);
+    loginUrl.searchParams.set("mode", "qr");
+    loginUrl.searchParams.set("cabinet", qrUrl.searchParams.get("cabinet") || "");
+  }
   return loginUrl.toString();
 }
 
@@ -114,6 +138,15 @@ export function getReturnToFromUrl() {
   if (fromQuery) {
     savePendingReturnTo(fromQuery);
     return fromQuery;
+  }
+  const qrMode = (params.get("mode") || "").toLowerCase();
+  const qrCabinetId = Number(params.get("cabinet"));
+  if (qrMode === "qr" && Number.isFinite(qrCabinetId)) {
+    const qrRoute = normalizeSafeAppRoute(`./index.html?mode=qr&cabinet=${qrCabinetId}`);
+    if (qrRoute) {
+      savePendingReturnTo(qrRoute);
+      return qrRoute;
+    }
   }
   return readPendingReturnTo();
 }
