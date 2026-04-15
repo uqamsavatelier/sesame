@@ -5,7 +5,7 @@ import {
   redirectToRoleHome,
   requireSessionOrRedirect,
   signOut,
-} from "./auth.js?v=20260415b";
+} from "./auth.js?v=20260415c";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks } from "./audit.js";
 
 const $ = (id) => document.getElementById(id);

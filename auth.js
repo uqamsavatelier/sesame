@@ -61,9 +61,34 @@ function normalizeSafeAppRoute(target) {
   }
 }
 
+const RETURN_TO_STORAGE_KEY = "sav_return_to_after_login";
+
+function savePendingReturnTo(target) {
+  const safeTarget = normalizeSafeAppRoute(target);
+  if (!safeTarget) return "";
+  try {
+    sessionStorage.setItem(RETURN_TO_STORAGE_KEY, safeTarget);
+  } catch {}
+  return safeTarget;
+}
+
+function readPendingReturnTo() {
+  try {
+    return normalizeSafeAppRoute(sessionStorage.getItem(RETURN_TO_STORAGE_KEY));
+  } catch {
+    return "";
+  }
+}
+
+function clearPendingReturnTo() {
+  try {
+    sessionStorage.removeItem(RETURN_TO_STORAGE_KEY);
+  } catch {}
+}
+
 function buildLoginRoute(returnTo = "") {
   const loginUrl = new URL("./login.html", window.location.href);
-  const safeReturnTo = normalizeSafeAppRoute(returnTo);
+  const safeReturnTo = savePendingReturnTo(returnTo);
   if (safeReturnTo) loginUrl.searchParams.set("returnTo", safeReturnTo);
   return loginUrl.toString();
 }
@@ -74,12 +99,19 @@ export function getHomeRouteForRole(role) {
 
 export function getReturnToFromUrl() {
   const params = new URLSearchParams(window.location.search);
-  return normalizeSafeAppRoute(params.get("returnTo"));
+  const fromQuery = normalizeSafeAppRoute(params.get("returnTo"));
+  if (fromQuery) {
+    savePendingReturnTo(fromQuery);
+    return fromQuery;
+  }
+  return readPendingReturnTo();
 }
 
 export function redirectToRoleHome(role, returnTo = "") {
   const fallback = getHomeRouteForRole(role);
-  const target = isPendingApprovalRole(role) ? fallback : (normalizeSafeAppRoute(returnTo) || fallback);
+  const safeReturnTo = normalizeSafeAppRoute(returnTo) || readPendingReturnTo();
+  const target = isPendingApprovalRole(role) ? fallback : (safeReturnTo || fallback);
+  if (!isPendingApprovalRole(role)) clearPendingReturnTo();
   window.location.href = target;
 }
 
@@ -144,11 +176,13 @@ export async function signInWithCompanySSO({ email, redirectTo } = {}) {
 
 export async function signOut() {
   await supa.auth.signOut();
+  clearPendingReturnTo();
   window.location.href = "./login.html";
 }
 
 export async function signOutSilently() {
   await supa.auth.signOut();
+  clearPendingReturnTo();
 }
 
 const PENDING_USERS_ALERT_KEY = "sav_pending_users_last_seen";

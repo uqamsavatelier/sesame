@@ -1,4 +1,4 @@
-import { signIn, signUp, getSession, getMyProfile, redirectToRoleHome, signOutSilently, getReturnToFromUrl } from "./auth.js?v=20260415b";
+import { signIn, signUp, getSession, getMyProfile, redirectToRoleHome, signOutSilently, getReturnToFromUrl } from "./auth.js?v=20260415c";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks } from "./audit.js";
 import { APP_LOGIN_URL } from "./supabaseClient.js";
 
