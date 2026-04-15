@@ -62,6 +62,7 @@ function normalizeSafeAppRoute(target) {
 }
 
 const RETURN_TO_STORAGE_KEY = "sav_return_to_after_login";
+const RETURN_TO_FALLBACK_STORAGE_KEY = "sav_return_to_after_login_persist";
 
 function savePendingReturnTo(target) {
   const safeTarget = normalizeSafeAppRoute(target);
@@ -69,12 +70,19 @@ function savePendingReturnTo(target) {
   try {
     sessionStorage.setItem(RETURN_TO_STORAGE_KEY, safeTarget);
   } catch {}
+  try {
+    localStorage.setItem(RETURN_TO_FALLBACK_STORAGE_KEY, safeTarget);
+  } catch {}
   return safeTarget;
 }
 
 function readPendingReturnTo() {
   try {
-    return normalizeSafeAppRoute(sessionStorage.getItem(RETURN_TO_STORAGE_KEY));
+    const fromSession = normalizeSafeAppRoute(sessionStorage.getItem(RETURN_TO_STORAGE_KEY));
+    if (fromSession) return fromSession;
+  } catch {}
+  try {
+    return normalizeSafeAppRoute(localStorage.getItem(RETURN_TO_FALLBACK_STORAGE_KEY));
   } catch {
     return "";
   }
@@ -83,6 +91,9 @@ function readPendingReturnTo() {
 function clearPendingReturnTo() {
   try {
     sessionStorage.removeItem(RETURN_TO_STORAGE_KEY);
+  } catch {}
+  try {
+    localStorage.removeItem(RETURN_TO_FALLBACK_STORAGE_KEY);
   } catch {}
 }
 
