@@ -1,4 +1,4 @@
-import { signIn, signUp, getSession, getMyProfile, redirectToRoleHome, signOutSilently } from "./auth.js";
+import { signIn, signUp, getSession, getMyProfile, redirectToRoleHome, signOutSilently, getReturnToFromUrl } from "./auth.js?v=20260415b";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks } from "./audit.js";
 import { APP_LOGIN_URL } from "./supabaseClient.js";
 
@@ -20,16 +20,18 @@ function setSignupPanelOpen(open) {
   document.body.dataset.theme = t;
 })();
 
+const returnTo = getReturnToFromUrl();
+
 (async () => {
   const s = await getSession();
   if (!s) return;
   const profile = await getMyProfile();
-  redirectToRoleHome(profile?.role ?? "new_user");
+  redirectToRoleHome(profile?.role ?? "new_user", returnTo);
 })();
 
 async function redirectCurrentUserHome() {
   const profile = await getMyProfile();
-  redirectToRoleHome(profile?.role ?? "new_user");
+  redirectToRoleHome(profile?.role ?? "new_user", returnTo);
 }
 
 async function doLogin() {

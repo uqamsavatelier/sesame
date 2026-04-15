@@ -1,4 +1,4 @@
-import { requireSessionOrRedirect, getMyProfile, signOut, isPendingApprovalRole, redirectToRoleHome, notifyAdminAboutPendingUsers } from "./auth.js";
+import { requireSessionOrRedirect, getMyProfile, signOut, isPendingApprovalRole, redirectToRoleHome, notifyAdminAboutPendingUsers } from "./auth.js?v=20260415b";
 import {
   listCabinets,
   listLoansAll,
@@ -63,7 +63,7 @@ function roleLabel(role) {
 function getModeFromUrl() {
   const p = new URLSearchParams(location.search);
   const m = (p.get("mode") || "").toLowerCase();
-  return m === "qr" && p.get("qr") === "1" ? m : "";
+  return m === "qr" && Number.isFinite(Number(p.get("cabinet"))) ? m : "";
 }
 
 function getRestrictedCabinetIdFromUrl() {
@@ -81,14 +81,14 @@ function getRestrictedCabinetLabel() {
 
 function buildQrCabinetHref(cabinetId) {
   return Number.isFinite(cabinetId)
-    ? `./index.html?mode=qr&qr=1&cabinet=${cabinetId}`
-    : "./index.html?mode=qr&qr=1";
+    ? `./index.html?mode=qr&cabinet=${cabinetId}`
+    : "./index.html?mode=qr";
 }
 
 function buildQrLoansHref(cabinetId) {
   return Number.isFinite(cabinetId)
-    ? `./my-loans.html?mode=qr&qr=1&cabinet=${cabinetId}`
-    : "./my-loans.html?mode=qr&qr=1";
+    ? `./my-loans.html?mode=qr&cabinet=${cabinetId}`
+    : "./my-loans.html?mode=qr";
 }
 
 function syncTopbarLogoLink() {
@@ -144,9 +144,11 @@ function buildNavLinks(role) {
   const normalizedRole = normalizeRole(role);
   if (getModeFromUrl() === "qr" && !isAdminRole(normalizedRole)) {
     const cabinetId = getRestrictedCabinetIdFromUrl();
+    const cabinetLabel = getRestrictedCabinetLabel();
     const loansHref = buildQrLoansHref(cabinetId);
     return [
-      { label: `Mes emprunts (${Number(state.myOpenLoanCount) || 0})`, href: loansHref },
+      { label: cabinetLabel, href: buildQrCabinetHref(cabinetId) },
+      { label: "Mes emprunts", href: loansHref },
       { label: "Déconnexion", action: "logout", danger: true },
     ];
   }

@@ -1,6 +1,6 @@
 ﻿import { supa } from "./supabaseClient.js";
 
-import { requireSessionOrRedirect, getMyProfile, signOut, isPendingApprovalRole, redirectToRoleHome, notifyAdminAboutPendingUsers } from "./auth.js";
+import { requireSessionOrRedirect, getMyProfile, signOut, isPendingApprovalRole, redirectToRoleHome, notifyAdminAboutPendingUsers } from "./auth.js?v=20260415b";
 import { groupByHook, renderHookCard } from "./ui.js";
 import {
   listCabinets,

@@ -48,12 +48,39 @@ export function isPendingApprovalRole(role) {
   return normalizeRole(role) === "new_user";
 }
 
+function normalizeSafeAppRoute(target) {
+  const raw = String(target ?? "").trim();
+  if (!raw) return "";
+
+  try {
+    const resolved = new URL(raw, window.location.href);
+    if (resolved.origin !== window.location.origin) return "";
+    return `${resolved.pathname}${resolved.search}${resolved.hash}`;
+  } catch {
+    return "";
+  }
+}
+
+function buildLoginRoute(returnTo = "") {
+  const loginUrl = new URL("./login.html", window.location.href);
+  const safeReturnTo = normalizeSafeAppRoute(returnTo);
+  if (safeReturnTo) loginUrl.searchParams.set("returnTo", safeReturnTo);
+  return loginUrl.toString();
+}
+
 export function getHomeRouteForRole(role) {
   return isPendingApprovalRole(role) ? "./waiting.html" : "./index.html";
 }
 
-export function redirectToRoleHome(role) {
-  window.location.href = getHomeRouteForRole(role);
+export function getReturnToFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  return normalizeSafeAppRoute(params.get("returnTo"));
+}
+
+export function redirectToRoleHome(role, returnTo = "") {
+  const fallback = getHomeRouteForRole(role);
+  const target = isPendingApprovalRole(role) ? fallback : (normalizeSafeAppRoute(returnTo) || fallback);
+  window.location.href = target;
 }
 
 function inferDomainFromEmail(email) {
@@ -70,7 +97,7 @@ export async function getSession() {
 
 export async function requireSessionOrRedirect() {
   const s = await getSession();
-  if (!s) window.location.href = "./login.html";
+  if (!s) window.location.href = buildLoginRoute(window.location.pathname + window.location.search + window.location.hash);
   return s;
 }
 
