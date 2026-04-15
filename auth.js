@@ -63,6 +63,7 @@ function normalizeSafeAppRoute(target) {
 
 const RETURN_TO_STORAGE_KEY = "sav_return_to_after_login";
 const RETURN_TO_FALLBACK_STORAGE_KEY = "sav_return_to_after_login_persist";
+const QR_LOGIN_CABINET_STORAGE_KEY = "sav_qr_login_cabinet";
 
 function extractQrRoute(target) {
   const safeTarget = normalizeSafeAppRoute(target);
@@ -80,6 +81,35 @@ function extractQrRoute(target) {
   } catch {
     return "";
   }
+}
+
+function savePendingQrCabinetFromTarget(target) {
+  const qrRoute = extractQrRoute(target);
+  if (!qrRoute) return null;
+  try {
+    const qrUrl = new URL(qrRoute, window.location.origin);
+    const cabinetId = Number(qrUrl.searchParams.get("cabinet"));
+    if (!Number.isFinite(cabinetId)) return null;
+    localStorage.setItem(QR_LOGIN_CABINET_STORAGE_KEY, String(cabinetId));
+    return cabinetId;
+  } catch {
+    return null;
+  }
+}
+
+export function getPendingQrCabinetId() {
+  try {
+    const value = Number(localStorage.getItem(QR_LOGIN_CABINET_STORAGE_KEY));
+    return Number.isFinite(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearPendingQrCabinetId() {
+  try {
+    localStorage.removeItem(QR_LOGIN_CABINET_STORAGE_KEY);
+  } catch {}
 }
 
 function savePendingReturnTo(target) {
@@ -118,12 +148,11 @@ function clearPendingReturnTo() {
 function buildLoginRoute(returnTo = "") {
   const loginUrl = new URL("./login.html", window.location.href);
   const safeReturnTo = savePendingReturnTo(returnTo);
+  const qrCabinetId = savePendingQrCabinetFromTarget(safeReturnTo);
   if (safeReturnTo) loginUrl.searchParams.set("returnTo", safeReturnTo);
-  const qrRoute = extractQrRoute(safeReturnTo);
-  if (qrRoute) {
-    const qrUrl = new URL(qrRoute, window.location.origin);
+  if (qrCabinetId != null) {
     loginUrl.searchParams.set("mode", "qr");
-    loginUrl.searchParams.set("cabinet", qrUrl.searchParams.get("cabinet") || "");
+    loginUrl.searchParams.set("cabinet", String(qrCabinetId));
   }
   return loginUrl.toString();
 }
@@ -155,7 +184,10 @@ export function redirectToRoleHome(role, returnTo = "") {
   const fallback = getHomeRouteForRole(role);
   const safeReturnTo = normalizeSafeAppRoute(returnTo) || readPendingReturnTo();
   const target = isPendingApprovalRole(role) ? fallback : (safeReturnTo || fallback);
-  if (!isPendingApprovalRole(role)) clearPendingReturnTo();
+  if (!isPendingApprovalRole(role)) {
+    clearPendingReturnTo();
+    clearPendingQrCabinetId();
+  }
   window.location.href = target;
 }
 
@@ -221,12 +253,14 @@ export async function signInWithCompanySSO({ email, redirectTo } = {}) {
 export async function signOut() {
   await supa.auth.signOut();
   clearPendingReturnTo();
+  clearPendingQrCabinetId();
   window.location.href = "./login.html";
 }
 
 export async function signOutSilently() {
   await supa.auth.signOut();
   clearPendingReturnTo();
+  clearPendingQrCabinetId();
 }
 
 const PENDING_USERS_ALERT_KEY = "sav_pending_users_last_seen";

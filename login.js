@@ -1,4 +1,14 @@
-import { signIn, signUp, getSession, getMyProfile, redirectToRoleHome, signOutSilently, getReturnToFromUrl } from "./auth.js?v=20260415e";
+import {
+  signIn,
+  signUp,
+  getSession,
+  getMyProfile,
+  redirectToRoleHome,
+  signOutSilently,
+  getReturnToFromUrl,
+  getPendingQrCabinetId,
+  clearPendingQrCabinetId,
+} from "./auth.js?v=20260415f";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks } from "./audit.js";
 import { APP_LOGIN_URL } from "./supabaseClient.js";
 
@@ -20,16 +30,37 @@ function setSignupPanelOpen(open) {
   document.body.dataset.theme = t;
 })();
 
+function getDirectQrTarget() {
+  const params = new URLSearchParams(window.location.search);
+  const mode = (params.get("mode") || "").toLowerCase();
+  const cabinetFromQuery = Number(params.get("cabinet"));
+  const cabinetId = Number.isFinite(cabinetFromQuery) ? cabinetFromQuery : getPendingQrCabinetId();
+  if (mode !== "qr" && !Number.isFinite(cabinetFromQuery)) {
+    if (!Number.isFinite(cabinetId)) return "";
+  }
+  return Number.isFinite(cabinetId) ? `./index.html?mode=qr&cabinet=${cabinetId}` : "";
+}
+
+function redirectAfterLogin(role) {
+  const qrTarget = getDirectQrTarget();
+  if (qrTarget && String(role ?? "").toLowerCase() !== "new_user") {
+    clearPendingQrCabinetId();
+    window.location.href = qrTarget;
+    return;
+  }
+  redirectToRoleHome(role, getReturnToFromUrl());
+}
+
 (async () => {
   const s = await getSession();
   if (!s) return;
   const profile = await getMyProfile();
-  redirectToRoleHome(profile?.role ?? "new_user", getReturnToFromUrl());
+  redirectAfterLogin(profile?.role ?? "new_user");
 })();
 
 async function redirectCurrentUserHome() {
   const profile = await getMyProfile();
-  redirectToRoleHome(profile?.role ?? "new_user", getReturnToFromUrl());
+  redirectAfterLogin(profile?.role ?? "new_user");
 }
 
 async function doLogin() {
