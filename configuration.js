@@ -2,7 +2,7 @@
 import { requireSessionOrRedirect, getMyProfile, signOut, isPendingApprovalRole, redirectToRoleHome, notifyAdminAboutPendingUsers } from "./auth.js";
 import {
   listUserProfiles,
-  updateUserProfileRole,
+  updateUserProfileAccess,
   countOpenSuggestions,
   countOpenLoansByBorrower,
   countPendingUsers,
@@ -20,6 +20,7 @@ const $ = (id) => document.getElementById(id);
 
 const ROLE_OPTIONS = ["new_user", "user", "consultant", "admin"];
 const KNOWN_ROLES = ["super_admin", ...ROLE_OPTIONS];
+const GROUP_OPTIONS = ["employe", "direction", "affichage"];
 const MATRIX_ROLES = ["new_user", "user", "consultant", "admin"];
 const MATRIX_ACTION_KEYS = [
   "consultation",
@@ -110,6 +111,7 @@ const state = {
   pendingUserCount: 0,
   myOpenLoanCount: 0,
   users: [],
+  editingUserId: null,
   usersFilter: "",
   roleMatrix: cloneDefaultMatrix(),
   roleMatrixInitial: cloneDefaultMatrix(),
@@ -149,6 +151,19 @@ function normalizeRole(role) {
   return "new_user";
 }
 
+function normalizeGroup(group) {
+  const value = String(group ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replaceAll("-", "_")
+    .replace(/\s+/g, "_");
+  if (value === "direction") return "direction";
+  if (value === "affichage") return "affichage";
+  return "employe";
+}
+
 function isAdminRole(role) {
   const r = normalizeRole(role);
   return r === "admin" || r === "super_admin";
@@ -160,6 +175,45 @@ function roleLabel(role) {
     : role === "consultant" ? "Consultant"
     : role === "new_user" ? "Salle d'attente"
     : "Utilisateur";
+}
+
+function groupLabel(group) {
+  const g = normalizeGroup(group);
+  return g === "direction" ? "Direction"
+    : g === "affichage" ? "Affichage"
+    : "Employé";
+}
+
+function canEditUserAccess(user) {
+  if (state.role === "super_admin") return true;
+  if (!isAdminRole(state.role)) return false;
+  const sameGroup = normalizeGroup(user?.user_group) === normalizeGroup(state.profile?.user_group);
+  return sameGroup || normalizeRole(user?.role) === "new_user";
+}
+
+function buildRoleOptions(currentRole) {
+  return ROLE_OPTIONS.map((role) => {
+    const selected = role === normalizeRole(currentRole) ? " selected" : "";
+    return `<option value="${role}"${selected}>${escapeHtml(roleLabel(role))}</option>`;
+  }).join("");
+}
+
+function buildGroupOptions(currentGroup, { allowAllGroups = false } = {}) {
+  const allowedGroups = allowAllGroups ? GROUP_OPTIONS : [normalizeGroup(state.profile?.user_group)];
+  return allowedGroups.map((group) => {
+    const selected = group === normalizeGroup(currentGroup) ? " selected" : "";
+    return `<option value="${group}"${selected}>${escapeHtml(groupLabel(group))}</option>`;
+  }).join("");
+}
+
+function visibleUsersForCurrentAdmin() {
+  return state.users.filter((user) => {
+    if (normalizeRole(user.role) === "super_admin") return false;
+    if (state.role === "super_admin") return true;
+    if (!isAdminRole(state.role)) return false;
+    return normalizeGroup(user.user_group) === normalizeGroup(state.profile?.user_group)
+      || normalizeRole(user.role) === "new_user";
+  });
 }
 
 function escapeHtml(s) {
@@ -365,7 +419,7 @@ function refreshPendingUsersUi() {
   }
   if (notice) {
     notice.textContent = count > 0
-      ? `${count} nouveau(x) compte(s) en attente. Ouvre l'onglet Utilisateurs pour attribuer un rôle.`
+      ? `${count} nouveau(x) compte(s) en attente. Ouvre l'onglet Utilisateurs pour attribuer un rôle et un groupe.`
       : "";
   }
 }
@@ -482,10 +536,9 @@ function cancelRoleMatrixChanges() {
 
 function renderUsers() {
   const q = String(state.usersFilter ?? "").trim().toLowerCase();
-  const users = state.users.filter((u) => {
-    if (normalizeRole(u.role) === "super_admin") return false;
+  const users = visibleUsersForCurrentAdmin().filter((u) => {
     if (!q) return true;
-    const hay = `${u.display_name ?? ""} ${u.id ?? ""} ${normalizeRole(u.role)}`.toLowerCase();
+    const hay = `${u.display_name ?? ""} ${u.id ?? ""} ${normalizeRole(u.role)} ${normalizeGroup(u.user_group)}`.toLowerCase();
     return hay.includes(q);
   }).sort((a, b) => {
     const aPending = normalizeRole(a.role) === "new_user" ? 0 : 1;
@@ -495,17 +548,33 @@ function renderUsers() {
   });
   $("usersTableBody").innerHTML = users.map((u) => {
     const currentRole = normalizeRole(u.role);
-    const options = ROLE_OPTIONS.map((r) => {
-      const sel = r === currentRole ? " selected" : "";
-      return `<option value="${r}"${sel}>${escapeHtml(roleLabel(r))}</option>`;
-    }).join("");
+    const currentGroup = normalizeGroup(u.user_group);
+    const isEditing = String(state.editingUserId ?? "") === String(u.id);
+    const canEdit = canEditUserAccess(u);
+    const allowAllGroups = state.role === "super_admin";
+    const roleCell = isEditing
+      ? `<select class="select user-role-select">${buildRoleOptions(currentRole)}</select>`
+      : escapeHtml(roleLabel(currentRole));
+    const groupCell = isEditing
+      ? `<select class="select user-group-select"${allowAllGroups ? "" : " disabled"}>${buildGroupOptions(currentGroup, { allowAllGroups })}</select>`
+      : escapeHtml(groupLabel(currentGroup));
+    const actionCell = !canEdit
+      ? ""
+      : isEditing
+        ? `
+          <div class="row" style="gap:8px; justify-content:flex-end;">
+            <button class="btn reactive user-access-save">Enregistrer</button>
+            <button class="btn secondary reactive user-access-cancel">Annuler</button>
+          </div>
+        `
+        : `<button class="btn secondary icon-btn reactive user-edit-toggle" aria-label="Modifier l'utilisateur" title="Modifier">✎</button>`;
     return `
       <tr data-user-id="${u.id}">
         <td>${escapeHtml(u.display_name || "Sans nom")}</td>
         <td><code>${escapeHtml(u.id)}</code></td>
-        <td>${escapeHtml(roleLabel(currentRole))}</td>
-        <td><select class="select user-role-select">${options}</select></td>
-        <td><button class="btn secondary reactive user-role-save">Enregistrer</button></td>
+        <td>${roleCell}</td>
+        <td>${groupCell}</td>
+        <td style="text-align:right;">${actionCell}</td>
       </tr>
     `;
   }).join("");
@@ -516,6 +585,7 @@ function renderUsers() {
 
 async function loadUsers() {
   state.users = await listUserProfiles();
+  state.editingUserId = null;
   state.pendingUserCount = state.users.filter((u) => normalizeRole(u.role) === "new_user").length;
   refreshPendingUsersUi();
   renderUsers();
@@ -892,11 +962,15 @@ function getSuperAdminCount() {
   return state.users.filter((u) => normalizeRole(u.role) === "super_admin").length;
 }
 
-async function updateUserRole(userId, nextRole) {
+async function updateUserAccess(userId, nextRole, nextGroup) {
   const row = state.users.find((u) => String(u.id) === String(userId));
   if (!row) throw new Error("Utilisateur introuvable.");
+  if (!canEditUserAccess(row)) throw new Error("Cet utilisateur n'appartient pas à ton groupe.");
   const currentRole = normalizeRole(row.role);
   const targetRole = normalizeRole(nextRole);
+  const targetGroup = state.role === "super_admin"
+    ? normalizeGroup(nextGroup)
+    : normalizeGroup(state.profile?.user_group);
   if (targetRole === "super_admin") {
     throw new Error("Le rôle super-admin n'est pas assignable depuis cette page.");
   }
@@ -909,8 +983,10 @@ async function updateUserRole(userId, nextRole) {
     throw new Error("Impossible de retirer le dernier super-admin.");
   }
 
-  const updated = await updateUserProfileRole(userId, targetRole);
+  const updated = await updateUserProfileAccess(userId, targetRole, targetGroup);
   row.role = normalizeRole(updated?.role ?? targetRole);
+  row.user_group = normalizeGroup(updated?.user_group ?? targetGroup);
+  state.editingUserId = null;
   state.pendingUserCount = state.users.filter((u) => normalizeRole(u.role) === "new_user").length;
   refreshPendingUsersUi();
 }
@@ -991,24 +1067,42 @@ function bind() {
     }
   });
   $("usersTableBody").addEventListener("click", async (e) => {
-    const btn = e.target.closest("button.user-role-save");
-    if (!btn) return;
-    const row = btn.closest("tr[data-user-id]");
+    const editBtn = e.target.closest("button.user-edit-toggle");
+    if (editBtn) {
+      const row = editBtn.closest("tr[data-user-id]");
+      if (!row) return;
+      state.editingUserId = row.dataset.userId;
+      renderUsers();
+      return;
+    }
+
+    const cancelBtn = e.target.closest("button.user-access-cancel");
+    if (cancelBtn) {
+      state.editingUserId = null;
+      renderUsers();
+      return;
+    }
+
+    const saveBtn = e.target.closest("button.user-access-save");
+    if (!saveBtn) return;
+    const row = saveBtn.closest("tr[data-user-id]");
     if (!row) return;
     const userId = row.dataset.userId;
-    const sel = row.querySelector("select.user-role-select");
-    if (!sel) return;
-    const nextRole = normalizeRole(sel.value);
+    const roleSelect = row.querySelector("select.user-role-select");
+    const groupSelect = row.querySelector("select.user-group-select");
+    if (!roleSelect) return;
+    const nextRole = normalizeRole(roleSelect.value);
+    const nextGroup = normalizeGroup(groupSelect?.value ?? state.profile?.user_group);
     try {
-      btn.disabled = true;
+      saveBtn.disabled = true;
       setStatus("usersStatus", "Mise à jour...");
-      await updateUserRole(userId, nextRole);
+      await updateUserAccess(userId, nextRole, nextGroup);
       renderUsers();
-      setStatus("usersStatus", "Rôle mis à jour.", 5000);
+      setStatus("usersStatus", "Rôle et groupe mis à jour.", 5000);
     } catch (err) {
       setStatus("usersStatus", `Erreur: ${err?.message ?? err}`, 5000);
     } finally {
-      btn.disabled = false;
+      saveBtn.disabled = false;
     }
   });
 

@@ -12,6 +12,20 @@ function toIntOrNull(v) {
   return Number.isFinite(n) ? Math.trunc(n) : null;
 }
 
+function normalizeGroup(group) {
+  const raw = String(group ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replaceAll("-", "_")
+    .replace(/\s+/g, "_");
+
+  if (raw === "direction") return "direction";
+  if (raw === "affichage") return "affichage";
+  return "employe";
+}
+
 function keyNoLabel(ref) {
   const keyNo = String(ref?.key_no ?? "").trim();
   if (keyNo) return keyNo;
@@ -128,6 +142,9 @@ async function callFunctionRaw(name, body) {
 export async function listCabinets(options = {}) {
   const includeInactive = !!options?.includeInactive;
   const selects = [
+    "id,name,location,is_active,max_hooks,pavilion_id,user_group",
+    "id,name,location,is_active,max_hooks,user_group",
+    "id,name,location,is_active,user_group",
     "id,name,location,is_active,max_hooks,pavilion_id",
     "id,name,location,is_active,max_hooks",
     "id,name,location,is_active",
@@ -145,6 +162,7 @@ export async function listCabinets(options = {}) {
         ...c,
         max_hooks: c?.max_hooks ?? null,
         pavilion_id: c?.pavilion_id ?? null,
+        user_group: normalizeGroup(c?.user_group ?? "employe"),
       }));
     }
     lastError = error;
@@ -160,22 +178,40 @@ export async function createCabinet(payload) {
   const pavilion_id = pavilionRaw == null || String(pavilionRaw).trim() === ""
     ? null
     : Number(pavilionRaw);
+  const user_group = normalizeGroup(payload?.user_group ?? "employe");
   const max_hooks = Number.isFinite(maxHooksRaw) && maxHooksRaw > 0 ? Math.trunc(maxHooksRaw) : null;
   if (!name) throw new Error("Nom d'armoire requis.");
   if (!max_hooks) throw new Error("Maximum de crochets invalide.");
   if (pavilion_id != null && !Number.isFinite(pavilion_id)) throw new Error("Pavillon invalide.");
 
-  const { data, error } = await supa
+  let result = await supa
     .from("cabinets")
     .insert({
       name,
       location,
       max_hooks,
       pavilion_id,
+      user_group,
       is_active: true,
     })
-    .select("id,name,location,is_active,max_hooks,pavilion_id")
+    .select("id,name,location,is_active,max_hooks,pavilion_id,user_group")
     .single();
+
+  if (result.error && /user_group/i.test(String(result.error?.message ?? ""))) {
+    result = await supa
+      .from("cabinets")
+      .insert({
+        name,
+        location,
+        max_hooks,
+        pavilion_id,
+        is_active: true,
+      })
+      .select("id,name,location,is_active,max_hooks,pavilion_id")
+      .single();
+  }
+
+  const { data, error } = result;
 
   if (!error) {
     safeAudit({
@@ -186,7 +222,10 @@ export async function createCabinet(payload) {
       status: "ok",
       source: "frontend",
     });
-    return data;
+    return {
+      ...data,
+      user_group: normalizeGroup(data?.user_group ?? user_group),
+    };
   }
 
   const viaFn = await callFunctionRaw("cabinets-create", {
@@ -194,6 +233,7 @@ export async function createCabinet(payload) {
     location,
     max_hooks,
     pavilion_id,
+    user_group,
   });
   const created = viaFn?.cabinet ?? viaFn;
   safeAudit({
@@ -204,18 +244,36 @@ export async function createCabinet(payload) {
     status: "ok",
     source: "frontend",
   });
-  return created;
+  return {
+    ...created,
+    user_group: normalizeGroup(created?.user_group ?? user_group),
+  };
 }
 
 export async function updateCabinet(cabinetId, patch) {
   const id = Number(cabinetId);
   if (!Number.isFinite(id)) throw new Error("cabinet_id invalide.");
 
-  const { data: beforeRow, error: beforeErr } = await supa
-    .from("cabinets")
-    .select("id,name,location,is_active,max_hooks,pavilion_id")
-    .eq("id", id)
-    .maybeSingle();
+  let beforeRow = null;
+  let beforeErr = null;
+  for (const selectClause of [
+    "id,name,location,is_active,max_hooks,pavilion_id,user_group",
+    "id,name,location,is_active,max_hooks,pavilion_id",
+    "id,name,location,is_active,max_hooks",
+  ]) {
+    const result = await supa
+      .from("cabinets")
+      .select(selectClause)
+      .eq("id", id)
+      .maybeSingle();
+    if (!result.error) {
+      beforeRow = result.data;
+      beforeErr = null;
+      break;
+    }
+    beforeErr = result.error;
+    if (!/user_group|pavilion_id/i.test(String(result.error?.message ?? ""))) break;
+  }
   if (beforeErr) throw beforeErr;
   if (!beforeRow) throw new Error("Armoire introuvable.");
 
@@ -246,6 +304,9 @@ export async function updateCabinet(cabinetId, patch) {
       updates.pavilion_id = Math.trunc(pavilion);
     }
   }
+  if (patch?.user_group !== undefined) {
+    updates.user_group = normalizeGroup(patch.user_group);
+  }
 
   const changed = {};
   for (const [k, v] of Object.entries(updates)) {
@@ -253,7 +314,11 @@ export async function updateCabinet(cabinetId, patch) {
     if (prev !== v) changed[k] = v;
   }
   if (!Object.keys(changed).length) {
-    return { ...beforeRow, pavilion_id: beforeRow?.pavilion_id ?? null };
+    return {
+      ...beforeRow,
+      pavilion_id: beforeRow?.pavilion_id ?? null,
+      user_group: normalizeGroup(beforeRow?.user_group ?? "employe"),
+    };
   }
 
   let writeUpdates = { ...changed };
@@ -261,7 +326,7 @@ export async function updateCabinet(cabinetId, patch) {
     .from("cabinets")
     .update(writeUpdates)
     .eq("id", id)
-    .select("id,name,location,is_active,max_hooks,pavilion_id")
+    .select("id,name,location,is_active,max_hooks,pavilion_id,user_group")
     .single();
 
   if (result.error && /pavilion_id/i.test(String(result.error.message ?? "")) && "pavilion_id" in writeUpdates) {
@@ -271,6 +336,23 @@ export async function updateCabinet(cabinetId, patch) {
       .update(writeUpdates)
       .eq("id", id)
       .select("id,name,location,is_active,max_hooks")
+      .single();
+  }
+
+  if (result.error && /user_group/i.test(String(result.error.message ?? "")) && "user_group" in writeUpdates) {
+    delete writeUpdates.user_group;
+    if (!Object.keys(writeUpdates).length) {
+      return {
+        ...beforeRow,
+        pavilion_id: beforeRow?.pavilion_id ?? null,
+        user_group: normalizeGroup(beforeRow?.user_group ?? "employe"),
+      };
+    }
+    result = await supa
+      .from("cabinets")
+      .update(writeUpdates)
+      .eq("id", id)
+      .select("id,name,location,is_active,max_hooks,pavilion_id")
       .single();
   }
 
@@ -285,7 +367,11 @@ export async function updateCabinet(cabinetId, patch) {
     status: "ok",
     source: "frontend",
   });
-  return { ...data, pavilion_id: data?.pavilion_id ?? null };
+  return {
+    ...data,
+    pavilion_id: data?.pavilion_id ?? null,
+    user_group: normalizeGroup(data?.user_group ?? beforeRow?.user_group ?? "employe"),
+  };
 }
 
 export async function getCabinetUsage(cabinetId) {
@@ -372,21 +458,49 @@ export async function listOpenLoansByKeyIds(keyIds) {
 
 export async function listProfilesByIds(ids) {
   if (!ids.length) return [];
-  const { data, error } = await supa
-    .from("user_profiles")
-    .select("id,display_name,role")
-    .in("id", ids);
+  let data = null;
+  let error = null;
+  for (const selectClause of ["id,display_name,role,user_group", "id,display_name,role"]) {
+    const result = await supa
+      .from("user_profiles")
+      .select(selectClause)
+      .in("id", ids);
+    if (!result.error) {
+      data = result.data;
+      error = null;
+      break;
+    }
+    error = result.error;
+    if (!/user_group/i.test(String(result.error?.message ?? ""))) break;
+  }
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map((row) => ({
+    ...row,
+    user_group: normalizeGroup(row?.user_group ?? "employe"),
+  }));
 }
 
 export async function listUserProfiles() {
-  const { data, error } = await supa
-    .from("user_profiles")
-    .select("id,display_name,role")
-    .order("display_name", { ascending: true });
+  let data = null;
+  let error = null;
+  for (const selectClause of ["id,display_name,role,user_group", "id,display_name,role"]) {
+    const result = await supa
+      .from("user_profiles")
+      .select(selectClause)
+      .order("display_name", { ascending: true });
+    if (!result.error) {
+      data = result.data;
+      error = null;
+      break;
+    }
+    error = result.error;
+    if (!/user_group/i.test(String(result.error?.message ?? ""))) break;
+  }
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map((row) => ({
+    ...row,
+    user_group: normalizeGroup(row?.user_group ?? "employe"),
+  }));
 }
 
 export async function countPendingUsers() {
@@ -398,23 +512,37 @@ export async function countPendingUsers() {
   return Number(count) || 0;
 }
 
-export async function updateUserProfileRole(userId, role) {
-  const { data, error } = await supa
+export async function updateUserProfileAccess(userId, role, userGroup) {
+  let result = await supa
     .from("user_profiles")
-    .update({ role })
+    .update({ role, user_group: normalizeGroup(userGroup ?? "employe") })
     .eq("id", userId)
-    .select("id,display_name,role")
+    .select("id,display_name,role,user_group")
     .single();
+
+  if (result.error && /user_group/i.test(String(result.error?.message ?? ""))) {
+    result = await supa
+      .from("user_profiles")
+      .update({ role })
+      .eq("id", userId)
+      .select("id,display_name,role")
+      .single();
+  }
+
+  const { data, error } = result;
   if (error) throw error;
   safeAudit({
     event_type: "role_update",
     action: "role_update",
     target: data?.display_name || String(userId),
-    details: `role -> ${role}`,
+    details: `role -> ${role}; group -> ${normalizeGroup(data?.user_group ?? userGroup ?? "employe")}`,
     status: "ok",
     source: "frontend",
   });
-  return data;
+  return {
+    ...data,
+    user_group: normalizeGroup(data?.user_group ?? userGroup ?? "employe"),
+  };
 }
 
 export async function listMissingByKeyIds(keyIds) {

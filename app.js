@@ -123,6 +123,77 @@ function isAdminRole(role) {
   return r === "admin" || r === "super_admin";
 }
 
+const GROUP_OPTIONS = ["employe", "direction", "affichage"];
+
+function normalizeGroup(group) {
+  const value = String(group ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replaceAll("-", "_")
+    .replace(/\s+/g, "_");
+  if (value === "direction") return "direction";
+  if (value === "affichage") return "affichage";
+  return "employe";
+}
+
+function groupLabel(group) {
+  const current = normalizeGroup(group);
+  return current === "direction" ? "Direction"
+    : current === "affichage" ? "Affichage"
+    : "Employé";
+}
+
+function isSuperAdminRole(role) {
+  return normalizeRole(role) === "super_admin";
+}
+
+function getCurrentUserGroup() {
+  return normalizeGroup(state.profile?.user_group ?? "employe");
+}
+
+function canAdministrateCabinet(cabinetOrId) {
+  const cabinet = typeof cabinetOrId === "object" && cabinetOrId
+    ? cabinetOrId
+    : state.cabinets.find((row) => Number(row.id) === Number(cabinetOrId));
+  if (!cabinet) return false;
+  if (isSuperAdminRole(state.role)) return true;
+  if (!isAdminRole(state.role)) return false;
+  return normalizeGroup(cabinet.user_group) === getCurrentUserGroup();
+}
+
+function canAdministrateCurrentCabinet() {
+  return canAdministrateCabinet(state.cabinetId);
+}
+
+function filterCabinetsForCurrentUser(cabinets) {
+  const rows = Array.isArray(cabinets) ? cabinets : [];
+  if (isSuperAdminRole(state.role) || !isAdminRole(state.role)) return rows;
+  const currentGroup = getCurrentUserGroup();
+  return rows.filter((cabinet) => normalizeGroup(cabinet.user_group) === currentGroup);
+}
+
+function buildCabinetGroupOptionsHtml(selectedGroup = "employe") {
+  const normalized = normalizeGroup(selectedGroup);
+  return GROUP_OPTIONS.map((group) => {
+    const selected = group === normalized ? " selected" : "";
+    return `<option value="${group}"${selected}>${groupLabel(group)}</option>`;
+  }).join("");
+}
+
+function syncCabinetGroupInputs(selectedGroup = "employe") {
+  const forcedGroup = isSuperAdminRole(state.role) ? normalizeGroup(selectedGroup) : getCurrentUserGroup();
+  const createSelect = $("cab_create_user_group");
+  const editSelect = $("cab_edit_user_group");
+  for (const select of [createSelect, editSelect]) {
+    if (!select) continue;
+    select.innerHTML = buildCabinetGroupOptionsHtml(forcedGroup);
+    select.value = forcedGroup;
+    select.disabled = !isSuperAdminRole(state.role);
+  }
+}
+
 const ROLE_ACTION_KEYS = [
   "consultation",
   "signalement",
@@ -891,41 +962,47 @@ function renderPreview(container, rows, max = 25) {
 }
 function renderCabinetGrid() {
   const grid = $("cabinetGrid");
-  const canEdit = isAdminRole(state.role);
-  const cards = canEdit
+  const canSeeInactive = isAdminRole(state.role);
+  const cards = canSeeInactive
     ? state.cabinets
     : state.cabinets.filter((c) => c.is_active !== false);
-  grid.innerHTML = cards.map(c => `
-    <div class="cabinet-card ${c.is_active === false ? "inactive" : ""}" data-cabinet-id="${c.id}">
-      <div class="cabinet-card-head">
-        <div class="cabinet-name">${c.name}</div>
-        ${canEdit
-    ? (c.is_active === false
-      ? `<button class="btn secondary reactive cabinet-reactivate-btn" data-cabinet-id="${c.id}" type="button">Remettre en fonction</button>`
-      : `<button class="btn secondary icon-btn btn-edit cabinet-edit-btn" data-cabinet-id="${c.id}" type="button" aria-label="Éditer l'armoire">✎</button>`)
-    : ""}
+  grid.innerHTML = cards.map((c) => {
+    const canEditCabinet = canAdministrateCabinet(c);
+    const metaParts = [];
+    if (c.is_active === false) metaParts.push("Hors fonction");
+    if (c.location) metaParts.push(c.location);
+    if (Number.isFinite(Number(c.max_hooks)) && Number(c.max_hooks) > 0) {
+      metaParts.push(`max ${Math.trunc(Number(c.max_hooks))} crochets`);
+    }
+    metaParts.push(`Groupe ${groupLabel(c.user_group)}`);
+    return `
+      <div class="cabinet-card ${c.is_active === false ? "inactive" : ""}" data-cabinet-id="${c.id}">
+        <div class="cabinet-card-head">
+          <div class="cabinet-name">${c.name}</div>
+          ${canEditCabinet
+      ? (c.is_active === false
+        ? `<button class="btn secondary reactive cabinet-reactivate-btn" data-cabinet-id="${c.id}" type="button">Remettre en fonction</button>`
+        : `<button class="btn secondary icon-btn btn-edit cabinet-edit-btn" data-cabinet-id="${c.id}" type="button" aria-label="Éditer l'armoire">✎</button>`)
+      : ""}
+        </div>
+        <div class="cabinet-meta">${metaParts.join(" • ")}</div>
       </div>
-      <div class="cabinet-meta">
-        ${c.is_active === false ? "Hors fonction" : ""}
-        ${c.is_active === false && c.location ? " • " : ""}
-        ${c.location ? c.location : ""}
-        ${Number.isFinite(Number(c.max_hooks)) && Number(c.max_hooks) > 0 ? ` • max ${Math.trunc(Number(c.max_hooks))} crochets` : ""}
-      </div>
-    </div>
-  `).join("");
+    `;
+  }).join("");
 
   if (!grid.dataset.boundClicks) {
     grid.dataset.boundClicks = "1";
     grid.addEventListener("click", async (e) => {
-      const reactivateBtn = e.target.closest("button.cabinet-reactivate-btn[data-cabinet-id]");
-      if (reactivateBtn) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (!isAdminRole(state.role)) return;
-        const id = Number(reactivateBtn.dataset.cabinetId);
-        if (!Number.isFinite(id)) return;
-        const ok = confirm("Voulez vous remettre en fonction cette armoire ?");
-        if (!ok) return;
+        const reactivateBtn = e.target.closest("button.cabinet-reactivate-btn[data-cabinet-id]");
+        if (reactivateBtn) {
+          e.preventDefault();
+          e.stopPropagation();
+          const id = Number(reactivateBtn.dataset.cabinetId);
+          const cabinet = state.cabinets.find((row) => Number(row.id) === id);
+          if (!canAdministrateCabinet(cabinet)) return;
+          if (!Number.isFinite(id)) return;
+          const ok = confirm("Voulez vous remettre en fonction cette armoire ?");
+          if (!ok) return;
         await updateCabinet(id, { is_active: true });
         await loadCabinets();
         renderCabinetGrid();
@@ -935,8 +1012,9 @@ function renderCabinetGrid() {
       if (editBtn) {
         e.preventDefault();
         e.stopPropagation();
-        if (!isAdminRole(state.role)) return;
         const editId = Number(editBtn.dataset.cabinetId);
+        const cabinet = state.cabinets.find((row) => Number(row.id) === editId);
+        if (!canAdministrateCabinet(cabinet)) return;
         if (Number.isFinite(editId)) await openCabinetEditModal(editId);
         return;
       }
@@ -966,9 +1044,8 @@ function renderCabinetGrid() {
 }
 
 async function openCabinetEditModal(cabinetId) {
-  if (!isAdminRole(state.role)) return;
   const cab = state.cabinets.find((c) => Number(c.id) === Number(cabinetId));
-  if (!cab) return;
+  if (!cab || !canAdministrateCabinet(cab)) return;
   if (!state.pavilions?.length) {
     try {
       state.pavilions = await listPavilions();
@@ -984,6 +1061,8 @@ async function openCabinetEditModal(cabinetId) {
     ? String(Math.trunc(Number(cab.max_hooks)))
     : "";
   $("cab_edit_pavilion_id").innerHTML = buildPavilionOptionsHtml(cab.pavilion_id ?? null);
+  syncCabinetGroupInputs(cab.user_group);
+  $("cab_edit_user_group").value = normalizeGroup(cab.user_group);
   $("cab_edit_is_active").value = cab.is_active === false ? "false" : "true";
   $("cabEditStatus").textContent = "";
   $("cabinetEditOverlay").hidden = false;
@@ -1001,11 +1080,13 @@ function closeCabinetEditModal() {
 }
 
 function openCabinetCreateModal() {
-  if (!isAdminRole(state.role)) return;
+  if (!isAdminRole(state.role) || !canRole("creation")) return;
   $("cab_create_name").value = "";
   $("cab_create_location").value = "";
   $("cab_create_max_hooks").value = "";
   $("cab_create_pavilion_id").innerHTML = buildPavilionOptionsHtml(null);
+  syncCabinetGroupInputs(getCurrentUserGroup());
+  $("cab_create_user_group").value = getCurrentUserGroup();
   $("cabCreateStatus").textContent = "";
   $("cabinetCreateOverlay").hidden = false;
   $("cabinetCreateModal").hidden = false;
@@ -1045,15 +1126,18 @@ function filterHook(hookNo, keysForHook, keyringsForHook, q) {
 }
 
 async function loadCabinets() {
-  state.cabinets = await listCabinets({ includeInactive: isAdminRole(state.role) });
+  const cabinets = await listCabinets({ includeInactive: isAdminRole(state.role) });
+  state.cabinets = filterCabinetsForCurrentUser(cabinets);
   const activeCabinets = state.cabinets.filter((c) => c.is_active !== false);
   const sel = $("cabinetSelect");
   sel.innerHTML = activeCabinets
     .map((c) => `<option value="${c.id}">${c.name}${c.location ? " — " + c.location : ""}</option>`)
     .join("");
 
-  state.cabinetId = activeCabinets[0]?.id ?? null;
-  if (state.cabinetId) sel.value = String(state.cabinetId);
+  const currentCabinetId = Number(state.cabinetId);
+  const stillAvailable = activeCabinets.find((c) => Number(c.id) === currentCabinetId);
+  state.cabinetId = stillAvailable?.id ?? activeCabinets[0]?.id ?? null;
+  if (state.cabinetId != null) sel.value = String(state.cabinetId);
 }
 
 async function loadDataForCabinet() {
@@ -1324,14 +1408,15 @@ function renderHookModal(hookNo) {
   const canDelete = canRole("suppression");
   const canCreate = canRole("creation");
   const canMove = canRole("deplacement");
-  const canAdminActions = isAdminRole(state.role) && (canCreate || canMove || canEdit || canDelete);
+  const canAdminCurrentCabinet = canAdministrateCurrentCabinet();
+  const canAdminActions = canAdminCurrentCabinet && (canCreate || canMove || canEdit || canDelete);
   $("hookModalActions").style.display = (canAdminActions || canSuggest) ? "flex" : "none";
   const btnBorrowAll = $("hookBorrowAll");
   if (btnBorrowAll) btnBorrowAll.style.display = canBorrow ? "" : "none";
   const btnReturnAll = $("hookReturnAll");
   if (btnReturnAll) btnReturnAll.style.display = canReturn ? "" : "none";
   const btnAddKey = $("hookAddKey");
-  if (btnAddKey) btnAddKey.style.display = isAdminRole(state.role) && canCreate ? "" : "none";
+  if (btnAddKey) btnAddKey.style.display = canAdminCurrentCabinet && canCreate ? "" : "none";
   const btnSuggest = $("hookProposals");
   if (btnSuggest) btnSuggest.style.display = canSuggest ? "" : "none";
 
@@ -1370,7 +1455,7 @@ function renderHookModal(hookNo) {
           ${loan && showLoanLine ? `<div class="muted">${loanLine}</div>` : ""}
           ${k.is_missing && missLine && !k.keyring_id ? `<div class="muted">${missLine}</div>` : ""}
         </div>
-        ${(canBorrow || canReturn || canSignal || (isAdminRole(role) && (canEdit || canDelete))) ? `
+        ${(canBorrow || canReturn || canSignal || (canAdminCurrentCabinet && (canEdit || canDelete))) ? `
           <div class="key-actions">
             ${(showLoanToggle && ((loan && canReturn) || (!loan && canBorrow))) ? `
               <button class="${toggleBtnClass} ${toggleAction === "key-borrow" ? "btn-borrow" : "btn-return"}" data-action="${toggleAction}" data-key-id="${k.id}" ${loanIdAttr} ${toggleAttrs}>${toggleLabel}</button>
@@ -1378,10 +1463,10 @@ function renderHookModal(hookNo) {
             ${canSignal ? `<button class="btn secondary reactive btn-missing" data-action="${k.is_missing ? "key-found" : "key-missing"}" data-key-id="${k.id}">
               ${k.is_missing ? "Signalée retrouvée" : "Signaler disparue"}
             </button>` : ""}
-            ${isAdminRole(role) && canEdit ? `
+            ${canAdminCurrentCabinet && canEdit ? `
               <button class="btn secondary icon-btn reactive btn-edit" data-action="key-edit" data-key-id="${k.id}" title="éditer">✎</button>
             ` : ""}
-            ${isAdminRole(role) && canDelete ? `
+            ${canAdminCurrentCabinet && canDelete ? `
               <button class="btn danger icon-btn reactive btn-delete" data-action="key-delete" data-key-id="${k.id}" title="Supprimer">X</button>
             ` : ""}
           </div>
@@ -1442,15 +1527,15 @@ function renderHookModal(hookNo) {
             </div>
             ${ringLoanLine ? `<div class="muted keyring-loan">${ringLoanLine}</div>` : ""}
           </div>
-          ${((canBorrow || canReturn) || (isAdminRole(role) && (canEdit || canDelete))) ? `
+          ${((canBorrow || canReturn) || (canAdminCurrentCabinet && (canEdit || canDelete))) ? `
             <div class="key-actions keyring-actions">
               ${((hasOnLoan && canReturn) || (!hasOnLoan && canBorrow)) ? `
                 <button class="${toggleBtnClass} ${toggleAction === "keyring-borrow" ? "btn-borrow" : "btn-return"}" data-action="${toggleAction}" data-keyring-id="${kr.id}" ${toggleAttrs}>${toggleLabel}</button>
               ` : ""}
-              ${isAdminRole(role) && canEdit ? `
+              ${canAdminCurrentCabinet && canEdit ? `
                 <button class="btn secondary icon-btn reactive btn-edit" data-action="keyring-edit" data-keyring-id="${kr.id}" title="éditer">✎</button>
               ` : ""}
-              ${isAdminRole(role) && canDelete ? `
+              ${canAdminCurrentCabinet && canDelete ? `
                 <button class="btn danger icon-btn reactive btn-delete" data-action="keyring-delete" data-keyring-id="${kr.id}" title="Supprimer">X</button>
               ` : ""}
             </div>
@@ -2129,6 +2214,9 @@ renderHookExistingDetails(Number($("m_hook").value));
     const maxHooks = Number(maxRaw);
     const pavilionIdRaw = $("cab_create_pavilion_id").value.trim();
     const pavilionId = pavilionIdRaw ? Number(pavilionIdRaw) : null;
+    const userGroup = isSuperAdminRole(state.role)
+      ? normalizeGroup($("cab_create_user_group").value)
+      : getCurrentUserGroup();
 
     if (!name) {
       $("cabCreateStatus").textContent = "Nom d'armoire requis.";
@@ -2151,6 +2239,7 @@ renderHookExistingDetails(Number($("m_hook").value));
         location: location || null,
         max_hooks: Math.trunc(maxHooks),
         pavilion_id: pavilionId,
+        user_group: userGroup,
       });
       await loadCabinets();
       renderCabinetGrid();
@@ -2175,6 +2264,9 @@ renderHookExistingDetails(Number($("m_hook").value));
     const pavilionId = pavilionIdRaw ? Number(pavilionIdRaw) : null;
     const maxRaw = $("cab_edit_max_hooks").value.trim();
     const maxHooks = Number(maxRaw);
+    const userGroup = isSuperAdminRole(state.role)
+      ? normalizeGroup($("cab_edit_user_group").value)
+      : getCurrentUserGroup();
 
     if (!name) {
       $("cabEditStatus").textContent = "Nom d'armoire requis.";
@@ -2198,6 +2290,7 @@ renderHookExistingDetails(Number($("m_hook").value));
         is_active: isActive,
         max_hooks: Math.trunc(maxHooks),
         pavilion_id: pavilionId,
+        user_group: userGroup,
       });
       await loadCabinets();
       renderCabinetGrid();
@@ -2322,7 +2415,7 @@ $("tabManual").addEventListener("click", () => setTab("manual"));
 
   // --- Admin panel (après role connu) ---
   const adminPanel = $("adminPanel");
-  $("btnAddKeys").style.display = isAdminRole(state.role) && canRole("creation") ? "" : "none";
+  $("btnAddKeys").style.display = canAdministrateCurrentCabinet() && canRole("creation") ? "" : "none";
   $("btnAddCabinet").style.display = isAdminRole(state.role) && canRole("creation") ? "" : "none";
 
   const modeNow = getModeFromUrl();
@@ -2982,6 +3075,7 @@ $("m_is_keyring").addEventListener("change", (e) => {
   });
 
   $("hookCreateKeyring").addEventListener("click", () => {
+    if (!canAdministrateCurrentCabinet()) return;
     if (!state.hookModal.selectedKeyIds.size) return;
     const hookNo = state.hookModal.hookNo;
     if (!Number.isFinite(hookNo)) return;
@@ -2989,13 +3083,14 @@ $("m_is_keyring").addEventListener("change", (e) => {
   });
 
   $("hookAddKey").addEventListener("click", () => {
-    if (!isAdminRole(state.role)) return;
+    if (!canAdministrateCurrentCabinet()) return;
     const hookNo = state.hookModal.hookNo;
     if (!Number.isFinite(hookNo)) return;
     openManualAddForHook(hookNo);
   });
 
   $("hookAddToKeyring").addEventListener("click", () => {
+    if (!canAdministrateCurrentCabinet()) return;
     if (!state.hookModal.selectedKeyIds.size) return;
     const hookNo = state.hookModal.hookNo;
     if (!Number.isFinite(hookNo)) return;
@@ -3003,6 +3098,7 @@ $("m_is_keyring").addEventListener("change", (e) => {
   });
 
   $("hookRemoveFromKeyring").addEventListener("click", async () => {
+    if (!canAdministrateCurrentCabinet()) return;
     const selected = [...state.hookModal.selectedKeyIds];
     const selectedKeys = selected.map(id => state.keys.find(k => k.id === id)).filter(Boolean);
     const selectedWith = selectedKeys.filter(k => k.keyring_id).map(k => k.id);
