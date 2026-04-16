@@ -880,6 +880,7 @@ let state = {
     open: false,
     lastShownSignature: "",
     loans: [],
+    autoOpenPending: false,
   },
   addKeysModalOpen: false,
   adminLoanUsers: [],
@@ -1493,22 +1494,67 @@ function getCurrentUserOpenLoansInCabinet() {
     .sort((a, b) => compareKeyNo(a.key, b.key));
 }
 
+function buildQrLoanPromptItems() {
+  const entries = getCurrentUserOpenLoansInCabinet();
+  const items = [];
+  const keyringEntriesById = new Map();
+
+  for (const entry of entries) {
+    const keyringId = Number(entry.key?.keyring_id);
+    if (Number.isFinite(keyringId) && keyringId > 0) {
+      if (!keyringEntriesById.has(keyringId)) keyringEntriesById.set(keyringId, []);
+      keyringEntriesById.get(keyringId).push(entry);
+      continue;
+    }
+
+    const hookNo = Number(entry.key?.hook_no);
+    items.push({
+      type: "key",
+      hookNo: Number.isFinite(hookNo) ? hookNo : 0,
+      label: `Crochet ${Number.isFinite(hookNo) ? hookNo : "?"} - Cle ${formatKeyTag(entry.key)}`,
+      entries: [entry],
+    });
+  }
+
+  for (const [keyringId, groupedEntries] of keyringEntriesById.entries()) {
+    const keyring = state.keyrings.find((row) => Number(row.id) === Number(keyringId));
+    const hookNo = Number(keyring?.hook_no ?? groupedEntries[0]?.key?.hook_no);
+    const ringCode = String(keyring?.ring_code ?? "?").trim() || "?";
+    const ringName = String(keyring?.name ?? "").trim();
+    const totalKeys = state.keys.filter((key) => Number(key.keyring_id) === Number(keyringId)).length || groupedEntries.length;
+    const keyCountLabel = `${totalKeys} ${totalKeys > 1 ? "cles" : "cle"}`;
+    items.push({
+      type: "keyring",
+      hookNo: Number.isFinite(hookNo) ? hookNo : 0,
+      label: `Crochet ${Number.isFinite(hookNo) ? hookNo : "?"} - Trousseau ${ringCode}${ringName ? `, ${ringName}` : ""} (${keyCountLabel})`,
+      entries: groupedEntries,
+    });
+  }
+
+  return items.sort((a, b) => {
+    const hookDiff = Number(a.hookNo) - Number(b.hookNo);
+    if (hookDiff !== 0) return hookDiff;
+    return String(a.label).localeCompare(String(b.label), "fr-CA", { sensitivity: "base", numeric: true });
+  });
+}
+
 function renderQrLoanPrompt() {
   const textEl = $("qrLoanPromptText");
   const listEl = $("qrLoanPromptList");
+  const statusEl = $("qrLoanPromptStatus");
   if (!textEl || !listEl) return;
   const count = state.qrLoanPrompt.loans.length;
   const cabinetLabel = getCurrentCabinetLabel() || "cette armoire";
   textEl.textContent = count > 1
     ? `Vous avez ${count} réservations en cours dans ${cabinetLabel}. Que voulez-vous faire ?`
     : `Vous avez cette réservation en cours dans ${cabinetLabel}. Que voulez-vous faire ?`;
-  listEl.innerHTML = state.qrLoanPrompt.loans.map(({ key, loan }) => {
-    const borrower = loanBorrowerLabel(loan);
-    const label = formatKeyTag(key);
-    const when = loan.loaned_at ? formatDateFr(loan.loaned_at) : "—";
+  if (statusEl) statusEl.textContent = "";
+  listEl.innerHTML = state.qrLoanPrompt.loans.map((item) => {
+    const firstLoan = item.entries?.[0]?.loan ?? null;
+    const when = firstLoan?.loaned_at ? formatDateFr(firstLoan.loaned_at) : "—";
     return `<div class="item" style="padding:10px 12px;">
-      <div class="title">${escapeHtml(label)}</div>
-      <div class="muted">Emprunté par ${escapeHtml(borrower)} le ${escapeHtml(when)}</div>
+      <div class="title">${escapeHtml(item.label)}</div>
+      <div class="muted">Emprunte le ${escapeHtml(when)}</div>
     </div>`;
   }).join("");
 }
@@ -1532,12 +1578,13 @@ function closeQrLoanPrompt(options = {}) {
 }
 
 function maybeOpenQrLoanPrompt() {
-  if (getModeFromUrl() !== "qr") return;
-  const loans = getCurrentUserOpenLoansInCabinet();
-  if (!loans.length) return;
-  const signature = `${state.cabinetId}:${loans.map(({ loan }) => loan.id).sort((a, b) => Number(a) - Number(b)).join(",")}`;
+  if (getModeFromUrl() !== "qr" || !state.qrLoanPrompt.autoOpenPending) return;
+  state.qrLoanPrompt.autoOpenPending = false;
+  const items = buildQrLoanPromptItems();
+  if (!items.length) return;
+  const signature = `${state.cabinetId}:${items.flatMap((item) => item.entries).map(({ loan }) => loan.id).sort((a, b) => Number(a) - Number(b)).join(",")}`;
   if (state.qrLoanPrompt.lastShownSignature === signature) return;
-  openQrLoanPrompt(loans, signature);
+  openQrLoanPrompt(items, signature);
 }
 
 async function loadMissingForKeys() {
@@ -2858,6 +2905,7 @@ $("tabManual").addEventListener("click", () => setTab("manual"));
   // choisir cabinet depuis URL (ou dernier scan)
   const mode = getModeFromUrl();
   applyCabinetMobileLayout(mode);
+  state.qrLoanPrompt.autoOpenPending = mode === "qr";
   let cabId = getCabinetFromUrl();
   if (cabId == null && mode === "scan") {
     const last = Number(localStorage.getItem("sav_last_cabinet"));
@@ -4137,10 +4185,53 @@ $("m_is_keyring").addEventListener("change", (e) => {
   $("qrLoanPromptClose").addEventListener("click", closeQrLoanPrompt);
   $("qrLoanPromptKeep").addEventListener("click", closeQrLoanPrompt);
   $("qrLoanPromptOverlay").addEventListener("click", closeQrLoanPrompt);
-  $("qrLoanPromptReturn").addEventListener("click", () => {
-    const target = buildQrLoansHref(state.cabinetId);
-    closeQrLoanPrompt();
-    window.location.href = target;
+  $("qrLoanPromptReturn").addEventListener("click", async () => {
+    const statusEl = $("qrLoanPromptStatus");
+    const returnBtn = $("qrLoanPromptReturn");
+    const keepBtn = $("qrLoanPromptKeep");
+    const closeBtn = $("qrLoanPromptClose");
+    const entries = state.qrLoanPrompt.loans
+      .flatMap((item) => Array.isArray(item.entries) ? item.entries : [])
+      .filter((entry) => Number.isFinite(Number(entry?.key?.id)));
+    if (!entries.length) {
+      closeQrLoanPrompt();
+      return;
+    }
+
+    try {
+      if (statusEl) statusEl.textContent = "Traitement...";
+      returnBtn.disabled = true;
+      keepBtn.disabled = true;
+      closeBtn.disabled = true;
+
+      const uniqueEntries = [];
+      const seenKeyIds = new Set();
+      for (const entry of entries) {
+        const keyId = Number(entry.key?.id);
+        if (!Number.isFinite(keyId) || seenKeyIds.has(keyId)) continue;
+        seenKeyIds.add(keyId);
+        uniqueEntries.push(entry);
+      }
+
+      for (const entry of uniqueEntries) {
+        const loanId = Number(entry.loan?.id);
+        const keyId = Number(entry.key?.id);
+        if (Number.isFinite(loanId) && loanId > 0) {
+          await fnLoanReturnAny({ loan_id: loanId, key_id: keyId });
+        } else {
+          await fnLoanReturnAny({ key_id: keyId });
+        }
+      }
+
+      closeQrLoanPrompt();
+      await refreshAfterAction();
+    } catch (e) {
+      if (statusEl) statusEl.textContent = `Erreur: ${e?.message ?? e}`;
+    } finally {
+      returnBtn.disabled = false;
+      keepBtn.disabled = false;
+      closeBtn.disabled = false;
+    }
   });
 
   $("adminLoanClose").addEventListener("click", closeAdminLoanModal);
