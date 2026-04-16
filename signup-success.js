@@ -8,12 +8,19 @@ const $ = (id) => document.getElementById(id);
 })();
 
 async function resolveNextTarget() {
+  const forcedNext = (new URLSearchParams(window.location.search).get("next") || "").toLowerCase();
   const session = await getSession();
-  if (session) {
+  if (session || forcedNext === "waiting") {
     return {
       label: "Redirection vers la salle d'attente dans",
       go() {
-        redirectToRoleHome("new_user", getReturnToFromUrl());
+        getSession().then((currentSession) => {
+          if (currentSession || forcedNext === "waiting") {
+            redirectToRoleHome("new_user", getReturnToFromUrl());
+            return;
+          }
+          window.location.href = "./login.html";
+        });
       },
     };
   }

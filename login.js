@@ -49,6 +49,15 @@ async function redirectCurrentUserHome() {
   redirectAfterLogin(profile?.role ?? "new_user");
 }
 
+async function waitForSession(maxAttempts = 10, delayMs = 150) {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const session = await getSession();
+    if (session) return session;
+    await new Promise((resolve) => window.setTimeout(resolve, delayMs));
+  }
+  return null;
+}
+
 async function doLogin() {
   setMessage("Connexion...");
   try {
@@ -78,7 +87,15 @@ async function doSignup() {
     const { data, error } = await signUp(displayName, email, password, emailRedirectTo);
     if (error) throw error;
 
-    window.location.href = "./signup-success.html";
+    let session = data?.session ?? await waitForSession();
+    if (!session) {
+      const { error: signInError } = await signIn(email, password);
+      if (!signInError) session = await waitForSession(12, 200);
+    }
+
+    window.location.href = session
+      ? "./signup-success.html?next=waiting"
+      : "./signup-success.html?next=login";
   } catch (e) {
     setMessage(e?.message ?? String(e));
   }
