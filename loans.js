@@ -1,4 +1,4 @@
-import { requireSessionOrRedirect, getMyProfile, signOut, isPendingApprovalRole, redirectToRoleHome, notifyAdminAboutPendingUsers } from "./auth.js?v=20260416c";
+import { requireSessionOrRedirect, getMyProfile, signOut, isPendingApprovalRole, redirectToRoleHome, notifyAdminAboutPendingUsers } from "./auth.js?v=20260416e";
 import {
   listCabinets,
   listLoansAll,
@@ -84,8 +84,8 @@ function getRestrictedCabinetLabel() {
 
 function buildQrCabinetHref(cabinetId) {
   return Number.isFinite(cabinetId)
-    ? `./qr-entry.html?cabinet=${cabinetId}`
-    : "./qr-entry.html";
+    ? `./index.html?mode=qr&cabinet=${cabinetId}`
+    : "./index.html";
 }
 
 function buildQrLoansHref(cabinetId) {

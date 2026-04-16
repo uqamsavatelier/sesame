@@ -9,7 +9,7 @@ import {
   getPendingQrCabinetId,
   clearPendingQrCabinetId,
   buildQrEntryRoute,
-} from "./auth.js?v=20260416c";
+} from "./auth.js?v=20260416e";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks } from "./audit.js";
 import { APP_LOGIN_URL } from "./supabaseClient.js";
 

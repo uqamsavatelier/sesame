@@ -3,8 +3,9 @@ import {
   getMyProfile,
   isPendingApprovalRole,
   buildQrEntryRoute,
+  buildWaitingRoute,
   rememberQrCabinet,
-} from "./auth.js?v=20260416c";
+} from "./auth.js?v=20260416e";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks } from "./audit.js";
 
 const $ = (id) => document.getElementById(id);
@@ -74,7 +75,7 @@ async function routeQrEntry() {
       "Redirection vers la salle d'attente.",
       "",
     );
-    window.location.replace(`./waiting.html?mode=qr&cabinet=${cabinetId}`);
+    window.location.replace(buildWaitingRoute(cabinetId));
     return;
   }
 
@@ -83,7 +84,7 @@ async function routeQrEntry() {
     "Redirection vers l'armoire scannée.",
     "",
   );
-  window.location.replace(`./index.html?mode=qr&cabinet=${cabinetId}&from_entry=1`);
+  window.location.replace(buildQrEntryRoute(cabinetId));
 }
 
 (() => {

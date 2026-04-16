@@ -70,7 +70,8 @@ function parseCabinetId(value) {
 
 export function buildQrEntryRoute(cabinetId) {
   const parsed = parseCabinetId(cabinetId);
-  return parsed == null ? "./qr-entry.html" : `./qr-entry.html?cabinet=${parsed}`;
+  // Nom historique conserve pour compatibilite; la route QR canonique pointe maintenant vers index.html.
+  return parsed == null ? "./index.html" : `./index.html?mode=qr&cabinet=${parsed}`;
 }
 
 const RETURN_TO_STORAGE_KEY = "sav_return_to_after_login";

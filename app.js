@@ -1,6 +1,6 @@
 ﻿import { supa } from "./supabaseClient.js";
 
-import { requireSessionOrRedirect, getMyProfile, signOut, isPendingApprovalRole, redirectToRoleHome, notifyAdminAboutPendingUsers } from "./auth.js?v=20260416c";
+import { requireSessionOrRedirect, getMyProfile, signOut, isPendingApprovalRole, redirectToRoleHome, notifyAdminAboutPendingUsers } from "./auth.js?v=20260416e";
 import { groupByHook, renderHookCard } from "./ui.js";
 import {
   listCabinets,
@@ -385,8 +385,8 @@ function closeDrawer() {
 
 function buildQrCabinetHref(cabinetId) {
   return Number.isFinite(cabinetId)
-    ? `./qr-entry.html?cabinet=${cabinetId}`
-    : "./qr-entry.html";
+    ? `./index.html?mode=qr&cabinet=${cabinetId}`
+    : "./index.html";
 }
 
 function buildQrLoansHref(cabinetId) {
@@ -2394,13 +2394,10 @@ function renderPager(pageCount, total) {
 async function boot() {
   ensureAuditSyncStarted();
   installGlobalAuditErrorHooks();
-  const bootParams = new URLSearchParams(window.location.search);
-  if (getModeFromUrl() === "qr" && bootParams.get("from_entry") !== "1") {
-    const cabinetId = getRestrictedCabinetIdFromUrl();
-    if (cabinetId != null) {
-      window.location.replace(buildQrCabinetHref(cabinetId));
-      return;
-    }
+  const bootUrl = new URL(window.location.href);
+  if (getModeFromUrl() === "qr" && bootUrl.searchParams.has("from_entry")) {
+    bootUrl.searchParams.delete("from_entry");
+    history.replaceState({}, "", bootUrl.toString());
   }
   await requireSessionOrRedirect();
   // ---- Theme (appliquer dès le boot) ----

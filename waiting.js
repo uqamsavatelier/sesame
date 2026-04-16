@@ -7,7 +7,7 @@ import {
   getPendingQrCabinetId,
   requireSessionOrRedirect,
   signOut,
-} from "./auth.js?v=20260416c";
+} from "./auth.js?v=20260416e";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks } from "./audit.js";
 
 const $ = (id) => document.getElementById(id);
