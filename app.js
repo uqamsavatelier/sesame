@@ -881,17 +881,95 @@ let state = {
     lastShownSignature: "",
     loans: [],
   },
+  addKeysModalOpen: false,
   adminLoanUsers: [],
   openTargetHandled: false,
   suggestionCount: 0,
   pendingUserCount: 0,
   myOpenLoanCount: 0,
+  cabinetCreateModal: {
+    open: false,
+  },
   cabinetEditModal: {
     open: false,
     cabinetId: null,
   },
   rolePermissions: defaultPermissionsForRole("new_user"),
 };
+
+const modalHistory = {
+  stack: [],
+  nextToken: 0,
+};
+
+const modalCloseHandlers = new Map();
+
+function getCurrentHistoryModalToken() {
+  const token = Number(history.state?.sav_modal_token);
+  return Number.isFinite(token) ? token : null;
+}
+
+function registerModalCloseHandler(modalId, closeHandler) {
+  modalCloseHandlers.set(modalId, closeHandler);
+}
+
+function openTrackedModal(modalId, wasOpen = false) {
+  if (wasOpen) return;
+  const entry = { id: modalId, token: ++modalHistory.nextToken };
+  modalHistory.stack.push(entry);
+  const currentState = history.state && typeof history.state === "object" ? history.state : {};
+  history.pushState({ ...currentState, sav_modal_token: entry.token }, "", location.href);
+}
+
+function removeTrackedModal(modalId) {
+  for (let i = modalHistory.stack.length - 1; i >= 0; i -= 1) {
+    if (modalHistory.stack[i].id !== modalId) continue;
+    modalHistory.stack.splice(i, 1);
+    break;
+  }
+}
+
+function closeTrackedModal(modalId, performClose, options = {}) {
+  const fromHistory = options?.fromHistory === true;
+  const top = modalHistory.stack[modalHistory.stack.length - 1];
+  if (!fromHistory && top?.id === modalId && getCurrentHistoryModalToken() === top.token) {
+    history.back();
+    return false;
+  }
+  performClose();
+  removeTrackedModal(modalId);
+  return true;
+}
+
+function syncModalHistoryToBrowserState() {
+  const historyToken = getCurrentHistoryModalToken();
+  while (modalHistory.stack.length) {
+    const top = modalHistory.stack[modalHistory.stack.length - 1];
+    if (top.token === historyToken) break;
+    const closeHandler = modalCloseHandlers.get(top.id);
+    if (!closeHandler) {
+      modalHistory.stack.pop();
+      continue;
+    }
+    closeHandler({ fromHistory: true });
+  }
+}
+
+window.addEventListener("popstate", syncModalHistoryToBrowserState);
+registerModalCloseHandler("qrLoanPrompt", closeQrLoanPrompt);
+registerModalCloseHandler("cabinetEdit", closeCabinetEditModal);
+registerModalCloseHandler("cabinetCreate", closeCabinetCreateModal);
+registerModalCloseHandler("hook", closeHookModal);
+registerModalCloseHandler("edit", closeEditModal);
+registerModalCloseHandler("keyringEdit", closeKeyringEditModal);
+registerModalCloseHandler("keyringCreate", closeKeyringCreateModal);
+registerModalCloseHandler("keyringPick", closeKeyringPickModal);
+registerModalCloseHandler("keyInRing", closeKeyInRingModal);
+registerModalCloseHandler("deleteKey", closeDeleteKeyModal);
+registerModalCloseHandler("missingPrompt", closeMissingPrompt);
+registerModalCloseHandler("proposal", closeProposalModal);
+registerModalCloseHandler("returnPrompt", closeReturnPrompt);
+registerModalCloseHandler("adminLoan", closeAdminLoanModal);
 
 function getCabinetFromUrl() {
   const p = new URLSearchParams(location.search);
@@ -1006,7 +1084,8 @@ function buildKeyTicketLines(k, query = "") {
 function setCabinetInUrl(cabinetId) {
   const u = new URL(location.href);
   u.searchParams.set("cabinet", String(cabinetId));
-  history.pushState({}, "", u.toString());
+  const currentState = history.state && typeof history.state === "object" ? history.state : {};
+  history.pushState({ ...currentState }, "", u.toString());
   localStorage.setItem("sav_last_cabinet", String(cabinetId));
 }
 
@@ -1225,6 +1304,7 @@ function renderCabinetGrid() {
 async function openCabinetEditModal(cabinetId) {
   const cab = state.cabinets.find((c) => Number(c.id) === Number(cabinetId));
   if (!cab || !canAdministrateCabinet(cab)) return;
+  const wasOpen = state.cabinetEditModal.open;
   if (!state.pavilions?.length) {
     try {
       state.pavilions = await listPavilions();
@@ -1251,19 +1331,24 @@ async function openCabinetEditModal(cabinetId) {
   $("cabinetEditOverlay").hidden = false;
   $("cabinetEditModal").hidden = false;
   $("cabinetEditModal").setAttribute("aria-hidden", "false");
+  openTrackedModal("cabinetEdit", wasOpen);
 }
 
-function closeCabinetEditModal() {
-  state.cabinetEditModal.open = false;
-  state.cabinetEditModal.cabinetId = null;
-  $("cabinetEditOverlay").hidden = true;
-  $("cabinetEditModal").hidden = true;
-  $("cabinetEditModal").setAttribute("aria-hidden", "true");
-  $("cabEditStatus").textContent = "";
+function closeCabinetEditModal(options = {}) {
+  closeTrackedModal("cabinetEdit", () => {
+    state.cabinetEditModal.open = false;
+    state.cabinetEditModal.cabinetId = null;
+    $("cabinetEditOverlay").hidden = true;
+    $("cabinetEditModal").hidden = true;
+    $("cabinetEditModal").setAttribute("aria-hidden", "true");
+    $("cabEditStatus").textContent = "";
+  }, options);
 }
 
 function openCabinetCreateModal() {
   if (!isAdminRole(state.role) || !canRole("creation")) return;
+  const wasOpen = state.cabinetCreateModal.open;
+  state.cabinetCreateModal.open = true;
   $("cab_create_name").value = "";
   $("cab_create_location").value = "";
   $("cab_create_max_hooks").value = "";
@@ -1279,13 +1364,17 @@ function openCabinetCreateModal() {
   $("cabinetCreateOverlay").hidden = false;
   $("cabinetCreateModal").hidden = false;
   $("cabinetCreateModal").setAttribute("aria-hidden", "false");
+  openTrackedModal("cabinetCreate", wasOpen);
 }
 
-function closeCabinetCreateModal() {
-  $("cabinetCreateOverlay").hidden = true;
-  $("cabinetCreateModal").hidden = true;
-  $("cabinetCreateModal").setAttribute("aria-hidden", "true");
-  $("cabCreateStatus").textContent = "";
+function closeCabinetCreateModal(options = {}) {
+  closeTrackedModal("cabinetCreate", () => {
+    state.cabinetCreateModal.open = false;
+    $("cabinetCreateOverlay").hidden = true;
+    $("cabinetCreateModal").hidden = true;
+    $("cabinetCreateModal").setAttribute("aria-hidden", "true");
+    $("cabCreateStatus").textContent = "";
+  }, options);
 }
 
 
@@ -1425,17 +1514,21 @@ function renderQrLoanPrompt() {
 }
 
 function openQrLoanPrompt(loans, signature) {
+  const wasOpen = state.qrLoanPrompt.open;
   state.qrLoanPrompt.open = true;
   state.qrLoanPrompt.loans = Array.isArray(loans) ? loans : [];
   state.qrLoanPrompt.lastShownSignature = signature || "";
   renderQrLoanPrompt();
   setQrLoanPromptOpen(true);
+  openTrackedModal("qrLoanPrompt", wasOpen);
 }
 
-function closeQrLoanPrompt() {
-  state.qrLoanPrompt.open = false;
-  state.qrLoanPrompt.loans = [];
-  setQrLoanPromptOpen(false);
+function closeQrLoanPrompt(options = {}) {
+  closeTrackedModal("qrLoanPrompt", () => {
+    state.qrLoanPrompt.open = false;
+    state.qrLoanPrompt.loans = [];
+    setQrLoanPromptOpen(false);
+  }, options);
 }
 
 function maybeOpenQrLoanPrompt() {
@@ -1827,19 +1920,23 @@ function renderHookModal(hookNo) {
 }
 
 function openHookModal(hookNo) {
+  const wasOpen = state.hookModal.open;
   state.hookModal.open = true;
   state.hookModal.hookNo = hookNo;
   renderHookModal(hookNo);
   setHookModalOpen(true);
+  openTrackedModal("hook", wasOpen);
 }
 
-function closeHookModal() {
-  state.hookModal.open = false;
-  state.hookModal.hookNo = null;
-  state.hookModal.selectedKeyIds.clear();
-  state.hookModal.selectMode = false;
-  setHookSelectMode(false);
-  setHookModalOpen(false);
+function closeHookModal(options = {}) {
+  closeTrackedModal("hook", () => {
+    state.hookModal.open = false;
+    state.hookModal.hookNo = null;
+    state.hookModal.selectedKeyIds.clear();
+    state.hookModal.selectMode = false;
+    setHookSelectMode(false);
+    setHookModalOpen(false);
+  }, options);
 }
 
 function setEditModalOpen(open) {
@@ -1979,16 +2076,20 @@ function renderEditModal(keyId) {
 }
 
 function openEditModal(keyId) {
+  const wasOpen = state.editModal.open;
   state.editModal.open = true;
   state.editModal.keyId = keyId;
   renderEditModal(keyId);
   setEditModalOpen(true);
+  openTrackedModal("edit", wasOpen);
 }
 
-function closeEditModal() {
-  state.editModal.open = false;
-  state.editModal.keyId = null;
-  setEditModalOpen(false);
+function closeEditModal(options = {}) {
+  closeTrackedModal("edit", () => {
+    state.editModal.open = false;
+    state.editModal.keyId = null;
+    setEditModalOpen(false);
+  }, options);
 }
 
 function renderKeyringEditModal(keyringId) {
@@ -2002,16 +2103,20 @@ function renderKeyringEditModal(keyringId) {
 }
 
 function openKeyringEditModal(keyringId) {
+  const wasOpen = state.keyringEditModal.open;
   state.keyringEditModal.open = true;
   state.keyringEditModal.keyringId = keyringId;
   renderKeyringEditModal(keyringId);
   setKeyringEditModalOpen(true);
+  openTrackedModal("keyringEdit", wasOpen);
 }
 
-function closeKeyringEditModal() {
-  state.keyringEditModal.open = false;
-  state.keyringEditModal.keyringId = null;
-  setKeyringEditModalOpen(false);
+function closeKeyringEditModal(options = {}) {
+  closeTrackedModal("keyringEdit", () => {
+    state.keyringEditModal.open = false;
+    state.keyringEditModal.keyringId = null;
+    setKeyringEditModalOpen(false);
+  }, options);
 }
 
 function renderKeyringCreateModal(hookNo, selectedIds) {
@@ -2044,18 +2149,22 @@ function renderKeyringCreateModal(hookNo, selectedIds) {
 }
 
 function openKeyringCreateModal(hookNo, selectedIds) {
+  const wasOpen = state.keyringCreateModal.open;
   state.keyringCreateModal.open = true;
   state.keyringCreateModal.hookNo = hookNo;
   state.keyringCreateModal.selectedKeyIds = new Set(selectedIds);
   renderKeyringCreateModal(hookNo, state.keyringCreateModal.selectedKeyIds);
   setKeyringCreateModalOpen(true);
+  openTrackedModal("keyringCreate", wasOpen);
 }
 
-function closeKeyringCreateModal() {
-  state.keyringCreateModal.open = false;
-  state.keyringCreateModal.hookNo = null;
-  state.keyringCreateModal.selectedKeyIds.clear();
-  setKeyringCreateModalOpen(false);
+function closeKeyringCreateModal(options = {}) {
+  closeTrackedModal("keyringCreate", () => {
+    state.keyringCreateModal.open = false;
+    state.keyringCreateModal.hookNo = null;
+    state.keyringCreateModal.selectedKeyIds.clear();
+    setKeyringCreateModalOpen(false);
+  }, options);
 }
 
 function renderKeyringPickModal(hookNo) {
@@ -2070,46 +2179,59 @@ function renderKeyringPickModal(hookNo) {
 }
 
 function openKeyringPickModal(hookNo) {
+  const wasOpen = state.keyringPickModal.open;
   state.keyringPickModal.open = true;
   state.keyringPickModal.hookNo = hookNo;
   renderKeyringPickModal(hookNo);
   setKeyringPickModalOpen(true);
+  openTrackedModal("keyringPick", wasOpen);
 }
 
-function closeKeyringPickModal() {
-  state.keyringPickModal.open = false;
-  state.keyringPickModal.hookNo = null;
-  setKeyringPickModalOpen(false);
+function closeKeyringPickModal(options = {}) {
+  closeTrackedModal("keyringPick", () => {
+    state.keyringPickModal.open = false;
+    state.keyringPickModal.hookNo = null;
+    setKeyringPickModalOpen(false);
+  }, options);
 }
 
 function openKeyInRingModal(keyId) {
+  const wasOpen = state.keyInRingModal.open;
   state.keyInRingModal.open = true;
   state.keyInRingModal.keyId = keyId;
   $("keyInRingStatus").textContent = "";
   setKeyInRingModalOpen(true);
+  openTrackedModal("keyInRing", wasOpen);
 }
 
-function closeKeyInRingModal() {
-  state.keyInRingModal.open = false;
-  state.keyInRingModal.keyId = null;
-  setKeyInRingModalOpen(false);
+function closeKeyInRingModal(options = {}) {
+  closeTrackedModal("keyInRing", () => {
+    state.keyInRingModal.open = false;
+    state.keyInRingModal.keyId = null;
+    setKeyInRingModalOpen(false);
+  }, options);
 }
 
 function openDeleteKeyModal(keyId) {
+  const wasOpen = state.deleteKeyModal.open;
   state.deleteKeyModal.open = true;
   state.deleteKeyModal.keyId = keyId;
   $("delete_key_reason").value = "";
   $("deleteKeyStatus").textContent = "";
   setDeleteKeyModalOpen(true);
+  openTrackedModal("deleteKey", wasOpen);
 }
 
-function closeDeleteKeyModal() {
-  state.deleteKeyModal.open = false;
-  state.deleteKeyModal.keyId = null;
-  setDeleteKeyModalOpen(false);
+function closeDeleteKeyModal(options = {}) {
+  closeTrackedModal("deleteKey", () => {
+    state.deleteKeyModal.open = false;
+    state.deleteKeyModal.keyId = null;
+    setDeleteKeyModalOpen(false);
+  }, options);
 }
 
 function openMissingPrompt({ keyId, mode, keyringId, loanId, text }) {
+  const wasOpen = state.missingPrompt.open;
   state.missingPrompt.open = true;
   state.missingPrompt.keyId = keyId;
   state.missingPrompt.mode = mode;
@@ -2118,9 +2240,11 @@ function openMissingPrompt({ keyId, mode, keyringId, loanId, text }) {
   $("missingPromptText").textContent = text || "—";
   $("missingPromptStatus").textContent = "";
   setMissingPromptOpen(true);
+  openTrackedModal("missingPrompt", wasOpen);
 }
 
 function openProposalModal(hookNo) {
+  const wasOpen = state.proposalModal.open;
   state.proposalModal.open = true;
   state.proposalModal.hookNo = hookNo ?? null;
   $("proposalMessage").value = "";
@@ -2148,12 +2272,15 @@ function openProposalModal(hookNo) {
   $("proposalTarget").value = "hook";
   $("proposalTargetRow").style.display = "";
   setProposalModalOpen(true);
+  openTrackedModal("proposal", wasOpen);
 }
 
-function closeProposalModal() {
-  state.proposalModal.open = false;
-  state.proposalModal.hookNo = null;
-  setProposalModalOpen(false);
+function closeProposalModal(options = {}) {
+  closeTrackedModal("proposal", () => {
+    state.proposalModal.open = false;
+    state.proposalModal.hookNo = null;
+    setProposalModalOpen(false);
+  }, options);
 }
 
 function handleOpenTargetFromUrl() {
@@ -2179,13 +2306,15 @@ function handleOpenTargetFromUrl() {
   state.openTargetHandled = true;
 }
 
-function closeMissingPrompt() {
-  state.missingPrompt.open = false;
-  state.missingPrompt.keyId = null;
-  state.missingPrompt.mode = null;
-  state.missingPrompt.keyringId = null;
-  state.missingPrompt.loanId = null;
-  setMissingPromptOpen(false);
+function closeMissingPrompt(options = {}) {
+  closeTrackedModal("missingPrompt", () => {
+    state.missingPrompt.open = false;
+    state.missingPrompt.keyId = null;
+    state.missingPrompt.mode = null;
+    state.missingPrompt.keyringId = null;
+    state.missingPrompt.loanId = null;
+    setMissingPromptOpen(false);
+  }, options);
 }
 
 function renderReturnPromptStep() {
@@ -2209,6 +2338,7 @@ function renderReturnPromptStep() {
 }
 
 function openReturnPrompt({ keyId, loanId, borrowerName, loanedAt }) {
+  const wasOpen = state.returnPrompt.open;
   state.returnPrompt.open = true;
   state.returnPrompt.keyId = keyId;
   state.returnPrompt.loanId = loanId ?? null;
@@ -2218,16 +2348,19 @@ function openReturnPrompt({ keyId, loanId, borrowerName, loanedAt }) {
   $("returnPromptStatus").textContent = "";
   renderReturnPromptStep();
   setReturnPromptOpen(true);
+  openTrackedModal("returnPrompt", wasOpen);
 }
 
-function closeReturnPrompt() {
-  state.returnPrompt.open = false;
-  state.returnPrompt.keyId = null;
-  state.returnPrompt.loanId = null;
-  state.returnPrompt.borrowerName = "";
-  state.returnPrompt.loanedAt = null;
-  state.returnPrompt.step = 1;
-  setReturnPromptOpen(false);
+function closeReturnPrompt(options = {}) {
+  closeTrackedModal("returnPrompt", () => {
+    state.returnPrompt.open = false;
+    state.returnPrompt.keyId = null;
+    state.returnPrompt.loanId = null;
+    state.returnPrompt.borrowerName = "";
+    state.returnPrompt.loanedAt = null;
+    state.returnPrompt.step = 1;
+    setReturnPromptOpen(false);
+  }, options);
 }
 
 function buildAdminLoanUsersOptions(cabinet = null) {
@@ -2252,6 +2385,7 @@ async function ensureAdminLoanUsersLoaded() {
 async function openAdminLoanModal({ mode, keyId = null, keyringId = null } = {}) {
   if (!canAdminLendCabinet()) return;
   await ensureAdminLoanUsersLoaded();
+  const wasOpen = state.adminLoanModal.open;
   state.adminLoanModal.open = true;
   state.adminLoanModal.mode = mode === "keyring" ? "keyring" : "key";
   state.adminLoanModal.keyId = Number.isFinite(Number(keyId)) ? Number(keyId) : null;
@@ -2278,15 +2412,18 @@ async function openAdminLoanModal({ mode, keyId = null, keyringId = null } = {})
   $("adminLoanNote").value = "";
   $("adminLoanStatus").textContent = "";
   setAdminLoanModalOpen(true);
+  openTrackedModal("adminLoan", wasOpen);
 }
 
-function closeAdminLoanModal() {
-  state.adminLoanModal.open = false;
-  state.adminLoanModal.mode = "key";
-  state.adminLoanModal.keyId = null;
-  state.adminLoanModal.keyringId = null;
-  $("adminLoanStatus").textContent = "";
-  setAdminLoanModalOpen(false);
+function closeAdminLoanModal(options = {}) {
+  closeTrackedModal("adminLoan", () => {
+    state.adminLoanModal.open = false;
+    state.adminLoanModal.mode = "key";
+    state.adminLoanModal.keyId = null;
+    state.adminLoanModal.keyringId = null;
+    $("adminLoanStatus").textContent = "";
+    setAdminLoanModalOpen(false);
+  }, options);
 }
 
 async function refreshAfterAction() {
@@ -2397,7 +2534,8 @@ async function boot() {
   const bootUrl = new URL(window.location.href);
   if (getModeFromUrl() === "qr" && bootUrl.searchParams.has("from_entry")) {
     bootUrl.searchParams.delete("from_entry");
-    history.replaceState({}, "", bootUrl.toString());
+    const currentState = history.state && typeof history.state === "object" ? history.state : {};
+    history.replaceState({ ...currentState }, "", bootUrl.toString());
   }
   await requireSessionOrRedirect();
   // ---- Theme (appliquer dès le boot) ----
@@ -2450,15 +2588,22 @@ async function boot() {
   renderNav(state.profile, state.role);
 
   function openModal() {
-  $("modalOverlay").hidden = false;
-  $("addKeysModal").hidden = false;
-  $("addKeysModal").setAttribute("aria-hidden", "false");
-}
-function closeModal() {
-  $("modalOverlay").hidden = true;
-  $("addKeysModal").hidden = true;
-  $("addKeysModal").setAttribute("aria-hidden", "true");
-}
+    const wasOpen = state.addKeysModalOpen;
+    state.addKeysModalOpen = true;
+    $("modalOverlay").hidden = false;
+    $("addKeysModal").hidden = false;
+    $("addKeysModal").setAttribute("aria-hidden", "false");
+    openTrackedModal("addKeys", wasOpen);
+  }
+  function closeModal(options = {}) {
+    closeTrackedModal("addKeys", () => {
+      state.addKeysModalOpen = false;
+      $("modalOverlay").hidden = true;
+      $("addKeysModal").hidden = true;
+      $("addKeysModal").setAttribute("aria-hidden", "true");
+    }, options);
+  }
+  registerModalCloseHandler("addKeys", closeModal);
 
 function resetManualForm() {
   $("m_keyno").value = "";
