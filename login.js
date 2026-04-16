@@ -6,10 +6,8 @@ import {
   redirectToRoleHome,
   signOutSilently,
   getReturnToFromUrl,
-  getPendingQrCabinetId,
-  clearPendingQrCabinetId,
-  buildQrEntryRoute,
-} from "./auth.js?v=20260416e";
+  getDirectQrTarget,
+} from "./auth.js?v=20260416f";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks } from "./audit.js";
 import { APP_LOGIN_URL } from "./supabaseClient.js";
 
@@ -30,22 +28,6 @@ function setSignupPanelOpen(open) {
   const t = localStorage.getItem("sav_theme") === "light" ? "light" : "dark";
   document.body.dataset.theme = t;
 })();
-
-function parseCabinetId(value) {
-  const raw = String(value ?? "").trim();
-  if (!raw) return null;
-  const cabinetId = Number(raw);
-  return Number.isFinite(cabinetId) ? cabinetId : null;
-}
-
-function getDirectQrTarget() {
-  const params = new URLSearchParams(window.location.search);
-  const mode = (params.get("mode") || "").toLowerCase();
-  const cabinetFromQuery = parseCabinetId(params.get("cabinet"));
-  const cabinetId = cabinetFromQuery ?? getPendingQrCabinetId();
-  if (mode !== "qr" && cabinetFromQuery == null && cabinetId == null) return "";
-  return cabinetId != null ? buildQrEntryRoute(cabinetId) : "";
-}
 
 function redirectAfterLogin(role) {
   const qrTarget = getDirectQrTarget();

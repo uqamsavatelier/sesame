@@ -3,11 +3,11 @@ import {
   getMyProfile,
   isPendingApprovalRole,
   redirectToRoleHome,
-  buildQrEntryRoute,
-  getPendingQrCabinetId,
+  getDirectQrTarget,
+  getReturnToFromUrl,
   requireSessionOrRedirect,
   signOut,
-} from "./auth.js?v=20260416e";
+} from "./auth.js?v=20260416f";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks } from "./audit.js";
 
 const $ = (id) => document.getElementById(id);
@@ -21,13 +21,6 @@ function applyTheme() {
   document.body.dataset.theme = t;
 }
 
-function parseCabinetId(value) {
-  const raw = String(value ?? "").trim();
-  if (!raw) return null;
-  const cabinetId = Number(raw);
-  return Number.isFinite(cabinetId) ? cabinetId : null;
-}
-
 async function refreshWaitingStatus(showPendingMessage = false) {
   setMessage("Vérification des accès...");
   await requireSessionOrRedirect();
@@ -39,14 +32,12 @@ async function refreshWaitingStatus(showPendingMessage = false) {
 
   const role = profile?.role ?? "new_user";
   if (!isPendingApprovalRole(role)) {
-    const params = new URLSearchParams(window.location.search);
-    const mode = (params.get("mode") || "").toLowerCase();
-    const cabinetId = parseCabinetId(params.get("cabinet")) ?? getPendingQrCabinetId();
-    if ((mode === "qr" || cabinetId != null) && cabinetId != null) {
-      window.location.href = buildQrEntryRoute(cabinetId);
+    const qrTarget = getDirectQrTarget();
+    if (qrTarget) {
+      window.location.replace(qrTarget);
       return;
     }
-    redirectToRoleHome(role);
+    redirectToRoleHome(role, getReturnToFromUrl());
     return;
   }
 

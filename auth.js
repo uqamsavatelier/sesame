@@ -207,6 +207,29 @@ export function getReturnToFromUrl() {
   return readPendingReturnTo();
 }
 
+export function getDirectQrTarget() {
+  const params = new URLSearchParams(window.location.search);
+  const mode = (params.get("mode") || "").toLowerCase();
+  const cabinetFromQuery = parseCabinetId(params.get("cabinet"));
+  if (cabinetFromQuery != null) {
+    return rememberQrCabinet(cabinetFromQuery) || buildQrEntryRoute(cabinetFromQuery);
+  }
+
+  const returnTo = getReturnToFromUrl();
+  const qrRouteFromReturnTo = extractQrRoute(returnTo);
+  if (qrRouteFromReturnTo) {
+    savePendingQrCabinetFromTarget(qrRouteFromReturnTo);
+    return qrRouteFromReturnTo;
+  }
+
+  const pendingCabinetId = getPendingQrCabinetId();
+  if (pendingCabinetId != null && (mode === "qr" || !!returnTo)) {
+    return rememberQrCabinet(pendingCabinetId) || buildQrEntryRoute(pendingCabinetId);
+  }
+
+  return "";
+}
+
 export function redirectToRoleHome(role, returnTo = "") {
   const fallback = getHomeRouteForRole(role);
   const safeReturnTo = normalizeSafeAppRoute(returnTo) || readPendingReturnTo();

@@ -5,7 +5,7 @@ import {
   buildQrEntryRoute,
   buildWaitingRoute,
   rememberQrCabinet,
-} from "./auth.js?v=20260416e";
+} from "./auth.js?v=20260416f";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks } from "./audit.js";
 
 const $ = (id) => document.getElementById(id);
