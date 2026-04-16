@@ -68,6 +68,11 @@ function parseCabinetId(value) {
   return Number.isFinite(cabinetId) ? cabinetId : null;
 }
 
+export function buildQrEntryRoute(cabinetId) {
+  const parsed = parseCabinetId(cabinetId);
+  return parsed == null ? "./qr-entry.html" : `./qr-entry.html?cabinet=${parsed}`;
+}
+
 const RETURN_TO_STORAGE_KEY = "sav_return_to_after_login";
 const RETURN_TO_FALLBACK_STORAGE_KEY = "sav_return_to_after_login_persist";
 const QR_LOGIN_CABINET_STORAGE_KEY = "sav_qr_login_cabinet";
@@ -78,13 +83,12 @@ function extractQrRoute(target) {
 
   try {
     const resolved = new URL(safeTarget, window.location.origin);
+    const pathname = resolved.pathname.toLowerCase();
     const mode = (resolved.searchParams.get("mode") || "").toLowerCase();
     const cabinetId = parseCabinetId(resolved.searchParams.get("cabinet"));
-    if (mode !== "qr" || cabinetId == null) return "";
-    const route = new URL("./index.html", resolved);
-    route.searchParams.set("mode", "qr");
-    route.searchParams.set("cabinet", String(cabinetId));
-    return `${route.pathname}${route.search}${route.hash}`;
+    const isQrTarget = mode === "qr" || pathname.endsWith("/qr-entry.html") || pathname.endsWith("qr-entry.html");
+    if (!isQrTarget || cabinetId == null) return "";
+    return normalizeSafeAppRoute(buildQrEntryRoute(cabinetId));
   } catch {
     return "";
   }
@@ -110,6 +114,18 @@ export function getPendingQrCabinetId() {
   } catch {
     return null;
   }
+}
+
+export function rememberQrCabinet(cabinetId) {
+  const parsed = parseCabinetId(cabinetId);
+  if (parsed == null) return "";
+  const qrRoute = normalizeSafeAppRoute(buildQrEntryRoute(parsed));
+  if (!qrRoute) return "";
+  savePendingReturnTo(qrRoute);
+  try {
+    localStorage.setItem(QR_LOGIN_CABINET_STORAGE_KEY, String(parsed));
+  } catch {}
+  return qrRoute;
 }
 
 export function clearPendingQrCabinetId() {
@@ -177,9 +193,8 @@ export function getReturnToFromUrl() {
   const qrMode = (params.get("mode") || "").toLowerCase();
   const qrCabinetId = parseCabinetId(params.get("cabinet"));
   if (qrMode === "qr" && qrCabinetId != null) {
-    const qrRoute = normalizeSafeAppRoute(`./index.html?mode=qr&cabinet=${qrCabinetId}`);
+    const qrRoute = rememberQrCabinet(qrCabinetId);
     if (qrRoute) {
-      savePendingReturnTo(qrRoute);
       return qrRoute;
     }
   }
@@ -191,7 +206,7 @@ export function redirectToRoleHome(role, returnTo = "") {
   const safeReturnTo = normalizeSafeAppRoute(returnTo) || readPendingReturnTo();
   const qrCabinetId = getPendingQrCabinetId();
   const qrFallback = qrCabinetId != null
-    ? normalizeSafeAppRoute(`./index.html?mode=qr&cabinet=${qrCabinetId}`)
+    ? normalizeSafeAppRoute(buildQrEntryRoute(qrCabinetId))
     : "";
   const target = isPendingApprovalRole(role) ? fallback : (safeReturnTo || qrFallback || fallback);
   if (!isPendingApprovalRole(role)) {

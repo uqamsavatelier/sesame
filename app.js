@@ -1,6 +1,6 @@
 ﻿import { supa } from "./supabaseClient.js";
 
-import { requireSessionOrRedirect, getMyProfile, signOut, isPendingApprovalRole, redirectToRoleHome, notifyAdminAboutPendingUsers } from "./auth.js?v=20260416a";
+import { requireSessionOrRedirect, getMyProfile, signOut, isPendingApprovalRole, redirectToRoleHome, notifyAdminAboutPendingUsers } from "./auth.js?v=20260416b";
 import { groupByHook, renderHookCard } from "./ui.js";
 import {
   listCabinets,
@@ -385,8 +385,8 @@ function closeDrawer() {
 
 function buildQrCabinetHref(cabinetId) {
   return Number.isFinite(cabinetId)
-    ? `./index.html?mode=qr&cabinet=${cabinetId}`
-    : "./index.html?mode=qr";
+    ? `./qr-entry.html?cabinet=${cabinetId}`
+    : "./qr-entry.html";
 }
 
 function buildQrLoansHref(cabinetId) {
@@ -2394,6 +2394,14 @@ function renderPager(pageCount, total) {
 async function boot() {
   ensureAuditSyncStarted();
   installGlobalAuditErrorHooks();
+  const bootParams = new URLSearchParams(window.location.search);
+  if (getModeFromUrl() === "qr" && bootParams.get("from_entry") !== "1") {
+    const cabinetId = getRestrictedCabinetIdFromUrl();
+    if (cabinetId != null) {
+      window.location.replace(buildQrCabinetHref(cabinetId));
+      return;
+    }
+  }
   await requireSessionOrRedirect();
   // ---- Theme (appliquer dès le boot) ----
     applyTheme(getSavedTheme());

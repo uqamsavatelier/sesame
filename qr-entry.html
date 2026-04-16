@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sésame - Accès à l'armoire</title>
+  <link rel="stylesheet" href="./style.css?v=20260416c" />
+</head>
+<body class="login-page qr-entry-page">
+  <main class="container">
+    <section class="card login-card qr-entry-card">
+      <div class="login-sesame">
+        <img class="logo-dark" src="./ressources/sesame_logo_dark.png?v=20260216" alt="Sesame" />
+        <img class="logo-light" src="./ressources/sesame_logo_light.png?v=20260216" alt="Sesame" />
+      </div>
+
+      <div class="qr-entry-badge">Accès QR</div>
+
+      <div class="page-card-head">
+        <h1 class="h1">Accès à l'armoire</h1>
+      </div>
+
+      <div class="qr-entry-panel">
+        <div class="qr-entry-pulse" aria-hidden="true"></div>
+        <div id="qrEntryTitle" class="qr-entry-title">Préparation...</div>
+        <div id="qrEntryText" class="qr-entry-text">Connexion à l'armoire scannée.</div>
+      </div>
+
+      <div class="login-actions">
+        <button id="qrEntryRetry" class="btn secondary login-secondary-btn" hidden>Réessayer</button>
+      </div>
+
+      <div id="qrEntryMsg" class="muted login-msg" role="status" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <div class="app-version"></div>
+
+  <script type="module" src="./qr-entry.js?v=20260416c"></script>
+  <script type="module" src="./version.js?v=20260415a"></script>
+</body>
+</html>

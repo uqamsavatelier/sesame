@@ -8,7 +8,8 @@ import {
   getReturnToFromUrl,
   getPendingQrCabinetId,
   clearPendingQrCabinetId,
-} from "./auth.js?v=20260416a";
+  buildQrEntryRoute,
+} from "./auth.js?v=20260416b";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks } from "./audit.js";
 import { APP_LOGIN_URL } from "./supabaseClient.js";
 
@@ -43,13 +44,12 @@ function getDirectQrTarget() {
   const cabinetFromQuery = parseCabinetId(params.get("cabinet"));
   const cabinetId = cabinetFromQuery ?? getPendingQrCabinetId();
   if (mode !== "qr" && cabinetFromQuery == null && cabinetId == null) return "";
-  return cabinetId != null ? `./index.html?mode=qr&cabinet=${cabinetId}` : "";
+  return cabinetId != null ? buildQrEntryRoute(cabinetId) : "";
 }
 
 function redirectAfterLogin(role) {
   const qrTarget = getDirectQrTarget();
   if (qrTarget && String(role ?? "").toLowerCase() !== "new_user") {
-    clearPendingQrCabinetId();
     window.location.href = qrTarget;
     return;
   }
