@@ -4,10 +4,9 @@ import {
   getSession,
   getMyProfile,
   redirectToRoleHome,
-  signOutSilently,
   getReturnToFromUrl,
   getDirectQrTarget,
-} from "./auth.js?v=20260416f";
+} from "./auth.js?v=20260416g";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks } from "./audit.js";
 import { APP_LOGIN_URL } from "./supabaseClient.js";
 
@@ -79,7 +78,6 @@ async function doSignup() {
     const { data, error } = await signUp(displayName, email, password, emailRedirectTo);
     if (error) throw error;
 
-    if (data?.session) await signOutSilently();
     window.location.href = "./signup-success.html";
   } catch (e) {
     setMessage(e?.message ?? String(e));
