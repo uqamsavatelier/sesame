@@ -881,6 +881,7 @@ let state = {
     lastShownSignature: "",
     loans: [],
     autoOpenPending: false,
+    openDelayHandle: null,
   },
   addKeysModalOpen: false,
   adminLoanUsers: [],
@@ -1560,6 +1561,10 @@ function renderQrLoanPrompt() {
 }
 
 function openQrLoanPrompt(loans, signature) {
+  if (state.qrLoanPrompt.openDelayHandle != null) {
+    window.clearTimeout(state.qrLoanPrompt.openDelayHandle);
+    state.qrLoanPrompt.openDelayHandle = null;
+  }
   const wasOpen = state.qrLoanPrompt.open;
   state.qrLoanPrompt.open = true;
   state.qrLoanPrompt.loans = Array.isArray(loans) ? loans : [];
@@ -1571,6 +1576,10 @@ function openQrLoanPrompt(loans, signature) {
 
 function closeQrLoanPrompt(options = {}) {
   closeTrackedModal("qrLoanPrompt", () => {
+    if (state.qrLoanPrompt.openDelayHandle != null) {
+      window.clearTimeout(state.qrLoanPrompt.openDelayHandle);
+      state.qrLoanPrompt.openDelayHandle = null;
+    }
     state.qrLoanPrompt.open = false;
     state.qrLoanPrompt.loans = [];
     setQrLoanPromptOpen(false);
@@ -1584,7 +1593,13 @@ function maybeOpenQrLoanPrompt() {
   if (!items.length) return;
   const signature = `${state.cabinetId}:${items.flatMap((item) => item.entries).map(({ loan }) => loan.id).sort((a, b) => Number(a) - Number(b)).join(",")}`;
   if (state.qrLoanPrompt.lastShownSignature === signature) return;
-  openQrLoanPrompt(items, signature);
+  if (state.qrLoanPrompt.openDelayHandle != null) {
+    window.clearTimeout(state.qrLoanPrompt.openDelayHandle);
+  }
+  state.qrLoanPrompt.openDelayHandle = window.setTimeout(() => {
+    state.qrLoanPrompt.openDelayHandle = null;
+    openQrLoanPrompt(items, signature);
+  }, 450);
 }
 
 async function loadMissingForKeys() {
