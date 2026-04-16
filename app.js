@@ -1511,7 +1511,7 @@ function buildQrLoanPromptItems() {
     items.push({
       type: "key",
       hookNo: Number.isFinite(hookNo) ? hookNo : 0,
-      label: `Crochet ${Number.isFinite(hookNo) ? hookNo : "?"} - Cle ${formatKeyTag(entry.key)}`,
+      label: `Crochet ${Number.isFinite(hookNo) ? hookNo : "?"} - Clé ${formatKeyTag(entry.key)}`,
       entries: [entry],
     });
   }
@@ -1522,7 +1522,7 @@ function buildQrLoanPromptItems() {
     const ringCode = String(keyring?.ring_code ?? "?").trim() || "?";
     const ringName = String(keyring?.name ?? "").trim();
     const totalKeys = state.keys.filter((key) => Number(key.keyring_id) === Number(keyringId)).length || groupedEntries.length;
-    const keyCountLabel = `${totalKeys} ${totalKeys > 1 ? "cles" : "cle"}`;
+    const keyCountLabel = `${totalKeys} ${totalKeys > 1 ? "clés" : "clé"}`;
     items.push({
       type: "keyring",
       hookNo: Number.isFinite(hookNo) ? hookNo : 0,
@@ -1554,7 +1554,7 @@ function renderQrLoanPrompt() {
     const when = firstLoan?.loaned_at ? formatDateFr(firstLoan.loaned_at) : "—";
     return `<div class="item" style="padding:10px 12px;">
       <div class="title">${escapeHtml(item.label)}</div>
-      <div class="muted">Emprunte le ${escapeHtml(when)}</div>
+      <div class="muted">Emprunté le ${escapeHtml(when)}</div>
     </div>`;
   }).join("");
 }
