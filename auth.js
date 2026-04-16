@@ -189,7 +189,11 @@ export function getReturnToFromUrl() {
 export function redirectToRoleHome(role, returnTo = "") {
   const fallback = getHomeRouteForRole(role);
   const safeReturnTo = normalizeSafeAppRoute(returnTo) || readPendingReturnTo();
-  const target = isPendingApprovalRole(role) ? fallback : (safeReturnTo || fallback);
+  const qrCabinetId = getPendingQrCabinetId();
+  const qrFallback = qrCabinetId != null
+    ? normalizeSafeAppRoute(`./index.html?mode=qr&cabinet=${qrCabinetId}`)
+    : "";
+  const target = isPendingApprovalRole(role) ? fallback : (safeReturnTo || qrFallback || fallback);
   if (!isPendingApprovalRole(role)) {
     clearPendingReturnTo();
     clearPendingQrCabinetId();

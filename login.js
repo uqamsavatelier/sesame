@@ -8,7 +8,7 @@ import {
   getReturnToFromUrl,
   getPendingQrCabinetId,
   clearPendingQrCabinetId,
-} from "./auth.js?v=20260415g";
+} from "./auth.js?v=20260416a";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks } from "./audit.js";
 import { APP_LOGIN_URL } from "./supabaseClient.js";
 

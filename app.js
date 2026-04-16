@@ -1,6 +1,6 @@
 ﻿import { supa } from "./supabaseClient.js";
 
-import { requireSessionOrRedirect, getMyProfile, signOut, isPendingApprovalRole, redirectToRoleHome, notifyAdminAboutPendingUsers } from "./auth.js?v=20260415g";
+import { requireSessionOrRedirect, getMyProfile, signOut, isPendingApprovalRole, redirectToRoleHome, notifyAdminAboutPendingUsers } from "./auth.js?v=20260416a";
 import { groupByHook, renderHookCard } from "./ui.js";
 import {
   listCabinets,
@@ -876,6 +876,11 @@ let state = {
     keyId: null,
     keyringId: null,
   },
+  qrLoanPrompt: {
+    open: false,
+    lastShownSignature: "",
+    loans: [],
+  },
   adminLoanUsers: [],
   openTargetHandled: false,
   suggestionCount: 0,
@@ -1386,6 +1391,62 @@ async function loadLoansForKeys() {
   state.borrowersById = borrowersById;
 }
 
+function getCurrentUserOpenLoansInCabinet() {
+  const profileId = String(state.profile?.id ?? "").trim();
+  if (!profileId) return [];
+  return state.keys
+    .map((key) => {
+      const loan = state.loansByKey?.get(key.id);
+      if (!loan || String(loan.borrower_id ?? "") !== profileId) return null;
+      return { key, loan };
+    })
+    .filter(Boolean)
+    .sort((a, b) => compareKeyNo(a.key, b.key));
+}
+
+function renderQrLoanPrompt() {
+  const textEl = $("qrLoanPromptText");
+  const listEl = $("qrLoanPromptList");
+  if (!textEl || !listEl) return;
+  const count = state.qrLoanPrompt.loans.length;
+  const cabinetLabel = getCurrentCabinetLabel() || "cette armoire";
+  textEl.textContent = count > 1
+    ? `Vous avez ${count} réservations en cours dans ${cabinetLabel}. Que voulez-vous faire ?`
+    : `Vous avez cette réservation en cours dans ${cabinetLabel}. Que voulez-vous faire ?`;
+  listEl.innerHTML = state.qrLoanPrompt.loans.map(({ key, loan }) => {
+    const borrower = loanBorrowerLabel(loan);
+    const label = formatKeyTag(key);
+    const when = loan.loaned_at ? formatDateFr(loan.loaned_at) : "—";
+    return `<div class="item" style="padding:10px 12px;">
+      <div class="title">${escapeHtml(label)}</div>
+      <div class="muted">Emprunté par ${escapeHtml(borrower)} le ${escapeHtml(when)}</div>
+    </div>`;
+  }).join("");
+}
+
+function openQrLoanPrompt(loans, signature) {
+  state.qrLoanPrompt.open = true;
+  state.qrLoanPrompt.loans = Array.isArray(loans) ? loans : [];
+  state.qrLoanPrompt.lastShownSignature = signature || "";
+  renderQrLoanPrompt();
+  setQrLoanPromptOpen(true);
+}
+
+function closeQrLoanPrompt() {
+  state.qrLoanPrompt.open = false;
+  state.qrLoanPrompt.loans = [];
+  setQrLoanPromptOpen(false);
+}
+
+function maybeOpenQrLoanPrompt() {
+  if (getModeFromUrl() !== "qr") return;
+  const loans = getCurrentUserOpenLoansInCabinet();
+  if (!loans.length) return;
+  const signature = `${state.cabinetId}:${loans.map(({ loan }) => loan.id).sort((a, b) => Number(a) - Number(b)).join(",")}`;
+  if (state.qrLoanPrompt.lastShownSignature === signature) return;
+  openQrLoanPrompt(loans, signature);
+}
+
 async function loadMissingForKeys() {
   const keyIds = state.keys.map(k => k.id);
   if (!keyIds.length) {
@@ -1871,6 +1932,15 @@ function setAdminLoanModalOpen(open) {
   modal.setAttribute("aria-hidden", open ? "false" : "true");
 }
 
+function setQrLoanPromptOpen(open) {
+  const overlay = $("qrLoanPromptOverlay");
+  const modal = $("qrLoanPromptModal");
+  if (!overlay || !modal) return;
+  overlay.hidden = !open;
+  modal.hidden = !open;
+  modal.setAttribute("aria-hidden", open ? "false" : "true");
+}
+
 function getCurrentKeyringIdForKey(keyId) {
   const key = state.keys.find(k => k.id === keyId);
   if (!key) return null;
@@ -2277,6 +2347,7 @@ function render() {
     .join("");
 
   $("list").innerHTML = html || `<div class="muted" style="padding:12px;">Aucun résultat.</div>`;
+  maybeOpenQrLoanPrompt();
 }
 
 function renderPager(pageCount, total) {
@@ -3911,6 +3982,15 @@ $("m_is_keyring").addEventListener("change", (e) => {
       $("returnPromptReturn").disabled = false;
       $("returnPromptBorrow").disabled = false;
     }
+  });
+
+  $("qrLoanPromptClose").addEventListener("click", closeQrLoanPrompt);
+  $("qrLoanPromptKeep").addEventListener("click", closeQrLoanPrompt);
+  $("qrLoanPromptOverlay").addEventListener("click", closeQrLoanPrompt);
+  $("qrLoanPromptReturn").addEventListener("click", () => {
+    const target = buildQrLoansHref(state.cabinetId);
+    closeQrLoanPrompt();
+    window.location.href = target;
   });
 
   $("adminLoanClose").addEventListener("click", closeAdminLoanModal);

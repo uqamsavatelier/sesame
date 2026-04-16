@@ -666,6 +666,26 @@
   <div id="returnPromptStatus" class="muted" style="margin-top:8px;"></div>
 </section>
 
+<!-- ===================== MODAL : Emprunts en cours dans l'armoire QR ===================== -->
+<div id="qrLoanPromptOverlay" class="edit-overlay" hidden></div>
+
+<section id="qrLoanPromptModal" class="edit-modal" hidden aria-hidden="true">
+  <div class="hook-modal-head">
+    <div>
+      <div class="title">Réservations en cours</div>
+      <div class="muted" id="qrLoanPromptText">—</div>
+    </div>
+    <button id="qrLoanPromptClose" class="btn secondary reactive">Fermer</button>
+  </div>
+
+  <div id="qrLoanPromptList" class="list" style="margin-top:12px;"></div>
+
+  <div class="row" style="margin-top:12px;">
+    <button id="qrLoanPromptReturn" class="btn primary reactive">Retourner</button>
+    <button id="qrLoanPromptKeep" class="btn secondary reactive">Garder</button>
+  </div>
+</section>
+
 <!-- ===================== MODAL : Prêt administrateur ===================== -->
 <div id="adminLoanOverlay" class="edit-overlay" hidden></div>
 
@@ -703,7 +723,7 @@
   <div class="app-version"></div>
 
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-<script type="module" src="./app.js?v=20260415n"></script>
+<script type="module" src="./app.js?v=20260416a"></script>
 <script type="module" src="./version.js?v=20260415a"></script>
 </body>
 </html>
