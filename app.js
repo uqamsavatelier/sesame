@@ -1596,10 +1596,16 @@ function maybeOpenQrLoanPrompt() {
   if (state.qrLoanPrompt.openDelayHandle != null) {
     window.clearTimeout(state.qrLoanPrompt.openDelayHandle);
   }
-  state.qrLoanPrompt.openDelayHandle = window.setTimeout(() => {
-    state.qrLoanPrompt.openDelayHandle = null;
-    openQrLoanPrompt(items, signature);
-  }, 450);
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      state.qrLoanPrompt.openDelayHandle = window.setTimeout(() => {
+        state.qrLoanPrompt.openDelayHandle = null;
+        if (getModeFromUrl() !== "qr") return;
+        if (Number(state.cabinetId) !== Number(getCabinetFromUrl())) return;
+        openQrLoanPrompt(items, signature);
+      }, 450);
+    });
+  });
 }
 
 async function loadMissingForKeys() {
@@ -3099,6 +3105,11 @@ $("tabManual").addEventListener("click", () => setTab("manual"));
     state.q = e.target.value.trim();
     state.page = 0;
     render();
+  });
+  $("q").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    e.currentTarget.blur();
   });
 
   function onPagerClick(e) {
