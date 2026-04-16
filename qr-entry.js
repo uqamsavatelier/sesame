@@ -4,7 +4,7 @@ import {
   isPendingApprovalRole,
   buildQrEntryRoute,
   rememberQrCabinet,
-} from "./auth.js?v=20260416b";
+} from "./auth.js?v=20260416c";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks } from "./audit.js";
 
 const $ = (id) => document.getElementById(id);

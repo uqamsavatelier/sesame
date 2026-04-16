@@ -4,9 +4,10 @@ import {
   isPendingApprovalRole,
   redirectToRoleHome,
   buildQrEntryRoute,
+  getPendingQrCabinetId,
   requireSessionOrRedirect,
   signOut,
-} from "./auth.js?v=20260416b";
+} from "./auth.js?v=20260416c";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks } from "./audit.js";
 
 const $ = (id) => document.getElementById(id);
@@ -40,8 +41,8 @@ async function refreshWaitingStatus(showPendingMessage = false) {
   if (!isPendingApprovalRole(role)) {
     const params = new URLSearchParams(window.location.search);
     const mode = (params.get("mode") || "").toLowerCase();
-    const cabinetId = parseCabinetId(params.get("cabinet"));
-    if (mode === "qr" && cabinetId != null) {
+    const cabinetId = parseCabinetId(params.get("cabinet")) ?? getPendingQrCabinetId();
+    if ((mode === "qr" || cabinetId != null) && cabinetId != null) {
       window.location.href = buildQrEntryRoute(cabinetId);
       return;
     }

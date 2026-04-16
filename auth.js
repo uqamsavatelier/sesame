@@ -183,6 +183,11 @@ export function getHomeRouteForRole(role) {
   return isPendingApprovalRole(role) ? "./waiting.html" : "./index.html";
 }
 
+export function buildWaitingRoute(cabinetId = null) {
+  const parsed = parseCabinetId(cabinetId);
+  return parsed == null ? "./waiting.html" : `./waiting.html?mode=qr&cabinet=${parsed}`;
+}
+
 export function getReturnToFromUrl() {
   const params = new URLSearchParams(window.location.search);
   const fromQuery = normalizeSafeAppRoute(params.get("returnTo"));
@@ -208,7 +213,12 @@ export function redirectToRoleHome(role, returnTo = "") {
   const qrFallback = qrCabinetId != null
     ? normalizeSafeAppRoute(buildQrEntryRoute(qrCabinetId))
     : "";
-  const target = isPendingApprovalRole(role) ? fallback : (safeReturnTo || qrFallback || fallback);
+  const waitingQrFallback = qrCabinetId != null
+    ? normalizeSafeAppRoute(buildWaitingRoute(qrCabinetId))
+    : "";
+  const target = isPendingApprovalRole(role)
+    ? (waitingQrFallback || fallback)
+    : (safeReturnTo || qrFallback || fallback);
   if (!isPendingApprovalRole(role)) {
     clearPendingReturnTo();
     clearPendingQrCabinetId();
