@@ -1028,12 +1028,8 @@ function renderTutorialCategories() {
   const grid = $("tutorialCategoryGrid");
   if (!grid) return;
   grid.innerHTML = TUTORIAL_SECTIONS.map((section) => `
-    <button class="tutorial-category-card" type="button" data-tutorial-section="${escapeHtml(section.key)}">
-      <div class="tutorial-category-body">
-        <div class="title">${escapeHtml(section.label)}</div>
-        <div class="muted">${section.slideCount} étapes</div>
-        <div class="tutorial-category-cta">Ouvrir</div>
-      </div>
+    <button class="tutorial-link" type="button" data-tutorial-section="${escapeHtml(section.key)}">
+      ${escapeHtml(section.label)}
     </button>
   `).join("");
 }
@@ -1044,12 +1040,10 @@ function renderTutorialModal() {
   const progress = $("tutorialProgress");
   const title = $("tutorialSlideTitle");
   const image = $("tutorialSlideImage");
-  const prevBtn = $("tutorialPrev");
   const nextBtn = $("tutorialNext");
-  const backBtn = $("tutorialBackToSections");
   const sectionTitle = $("tutorialSectionTitle");
   const section = getTutorialSection();
-  if (!home || !viewer || !progress || !title || !image || !prevBtn || !nextBtn || !backBtn || !sectionTitle) return;
+  if (!home || !viewer || !progress || !title || !image || !nextBtn || !sectionTitle) return;
 
   if (!section) {
     home.hidden = false;
@@ -1070,9 +1064,7 @@ function renderTutorialModal() {
   title.textContent = slide.title;
   image.src = encodeURI(slide.image);
   image.alt = slide.title;
-  prevBtn.disabled = slideIndex === 0;
-  nextBtn.textContent = slideIndex >= section.slides.length - 1 ? "Terminer" : "Suivant";
-  backBtn.hidden = false;
+  nextBtn.textContent = slideIndex >= section.slides.length - 1 ? "Fermer" : "Suivant";
 }
 
 function openTutorialSection(sectionKey) {
@@ -1108,19 +1100,13 @@ function closeTutorialModal(options = {}) {
   }, options);
 }
 
-function goToTutorialHome() {
-  state.tutorialModal.sectionKey = null;
-  state.tutorialModal.slideIndex = 0;
-  renderTutorialModal();
-}
-
 function moveTutorialSlide(delta) {
   const section = getTutorialSection();
   if (!section) return;
   const nextIndex = state.tutorialModal.slideIndex + delta;
   if (nextIndex < 0) return;
   if (nextIndex >= section.slides.length) {
-    goToTutorialHome();
+    closeTutorialModal();
     return;
   }
   state.tutorialModal.slideIndex = nextIndex;
@@ -4745,8 +4731,6 @@ $("m_is_keyring").addEventListener("change", (e) => {
 
   $("tutorialClose").addEventListener("click", closeTutorialModal);
   $("tutorialOverlay").addEventListener("click", closeTutorialModal);
-  $("tutorialBackToSections").addEventListener("click", goToTutorialHome);
-  $("tutorialPrev").addEventListener("click", () => moveTutorialSlide(-1));
   $("tutorialNext").addEventListener("click", () => moveTutorialSlide(1));
   $("tutorialCategoryGrid").addEventListener("click", (e) => {
     const card = e.target.closest("[data-tutorial-section]");
@@ -4766,9 +4750,6 @@ $("m_is_keyring").addEventListener("change", (e) => {
     if (e.key === "ArrowRight") {
       e.preventDefault();
       moveTutorialSlide(1);
-    } else if (e.key === "ArrowLeft") {
-      e.preventDefault();
-      moveTutorialSlide(-1);
     }
   });
 

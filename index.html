@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Gestion clés — Accueil</title>
-  <link rel="stylesheet" href="./style.css?v=20260417e" />
+  <link rel="stylesheet" href="./style.css?v=20260417f" />
 </head>
 <body class="loading">
 
@@ -125,14 +125,14 @@
     <div id="tutorialHome" class="tutorial-home">
       <div class="tutorial-home-copy">
         <div class="title">Comment utiliser Sésame</div>
-        <div class="muted">Choisis une catégorie pour lancer le diaporama.</div>
+        <div class="muted">Choisis une section.</div>
       </div>
       <div id="tutorialCategoryGrid" class="tutorial-category-grid"></div>
     </div>
 
     <div id="tutorialViewer" class="tutorial-viewer" hidden>
       <div class="tutorial-toolbar">
-        <button id="tutorialBackToSections" class="btn secondary reactive" type="button">Sections</button>
+        <div id="tutorialSlideTitle" class="tutorial-progress">—</div>
         <div id="tutorialProgress" class="tutorial-progress">1 / 1</div>
       </div>
 
@@ -140,12 +140,7 @@
         <img id="tutorialSlideImage" class="tutorial-slide-image" alt="" />
       </div>
 
-      <div class="tutorial-caption">
-        <div id="tutorialSlideTitle" class="muted">—</div>
-      </div>
-
       <div class="tutorial-actions">
-        <button id="tutorialPrev" class="btn secondary reactive" type="button">Précédent</button>
         <button id="tutorialNext" class="btn reactive" type="button">Suivant</button>
       </div>
     </div>
@@ -771,7 +766,7 @@
   <div class="app-version"></div>
 
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script type="module" src="./app.js?v=20260417j"></script>
+  <script type="module" src="./app.js?v=20260417k"></script>
 <script type="module" src="./version.js?v=20260415a"></script>
 </body>
 </html>

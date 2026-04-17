@@ -636,18 +636,18 @@ body[data-theme="dark"] mark.hl{
 .tutorial-overlay{
   position: fixed;
   inset: 0;
-  background: rgba(2,6,23,.72);
-  backdrop-filter: blur(3px);
+  background: rgba(15,23,42,.22);
   z-index: 94;
 }
 .tutorial-modal{
   position: fixed;
-  inset: 12px;
+  inset: 0;
   z-index: 95;
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  background: rgba(2,6,23,.96);
-  box-shadow: 0 20px 60px rgba(0,0,0,.5);
+  border: none;
+  border-radius: 0;
+  background: rgba(15,23,42,.98);
+  box-shadow: none;
+  color: var(--text);
 }
 .tutorial-shell{
   display: flex;
@@ -660,7 +660,8 @@ body[data-theme="dark"] mark.hl{
   align-items:flex-start;
   justify-content:space-between;
   gap:12px;
-  padding: 14px 16px 10px;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--border);
 }
 .tutorial-close{
   width: 36px;
@@ -677,49 +678,35 @@ body[data-theme="dark"] mark.hl{
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 0 16px 16px;
+  padding: 18px 16px 16px;
 }
 .tutorial-home-copy{
-  margin-bottom: 14px;
+  margin-bottom: 18px;
 }
 .tutorial-category-grid{
-  display:grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  display:flex;
+  flex-direction:column;
   gap:12px;
 }
-.tutorial-category-card{
+.tutorial-link{
   padding: 0;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: rgba(255,255,255,.04);
+  border: none;
+  background: transparent;
   color: var(--text);
   text-align: left;
   cursor: pointer;
-  transition: border-color .12s ease, background .12s ease, transform .12s ease;
-}
-.tutorial-category-card:hover{
-  border-color: rgba(79,156,255,.55);
-  background: rgba(79,156,255,.10);
-  transform: translateY(-1px);
-}
-.tutorial-category-body{
-  padding: 14px 14px 12px;
-  display:flex;
-  flex-direction:column;
-  gap:6px;
-}
-.tutorial-category-cta{
-  margin-top: 4px;
   color: rgba(96,165,250,.95);
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 18px;
+  line-height: 1.4;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .tutorial-viewer{
   flex: 1;
   min-height: 0;
   display:flex;
   flex-direction:column;
-  padding: 0 16px 16px;
+  padding: 12px 16px 16px;
 }
 .tutorial-toolbar{
   display:flex;
@@ -729,7 +716,7 @@ body[data-theme="dark"] mark.hl{
   margin-bottom: 10px;
 }
 .tutorial-progress{
-  color: var(--muted);
+  color: var(--text);
   font-size: 13px;
   font-weight: 700;
 }
@@ -751,37 +738,39 @@ body[data-theme="dark"] mark.hl{
   max-height: 100%;
   object-fit: contain;
   border-radius: 8px;
-  background: rgba(255,255,255,.02);
-  box-shadow: 0 12px 30px rgba(0,0,0,.28);
-}
-.tutorial-caption{
-  margin-top: 10px;
-  min-height: 20px;
+  background: transparent;
+  box-shadow: none;
 }
 .tutorial-actions{
   display:flex;
-  justify-content:space-between;
+  justify-content:flex-end;
   gap:10px;
   margin-top: 12px;
 }
+body[data-theme="light"] .tutorial-overlay{
+  background: rgba(15,23,42,.12);
+}
+body[data-theme="light"] .tutorial-modal{
+  background: rgba(255,255,255,.98);
+}
+body[data-theme="light"] .tutorial-close{
+  background: rgba(15,23,42,.04);
+}
 @media (max-width: 680px){
-  .tutorial-modal{
-    inset: 0;
-    border-radius: 0;
-    border: none;
-  }
   .tutorial-topbar,
   .tutorial-home,
   .tutorial-viewer{
     padding-left: 12px;
     padding-right: 12px;
   }
-  .tutorial-actions .btn,
-  .tutorial-toolbar .btn{
+  .tutorial-actions .btn{
     min-height: 42px;
   }
   .tutorial-slide-image{
     max-width: 100%;
+  }
+  .tutorial-link{
+    font-size: 17px;
   }
 }
 /* ====== ACCUEIL: tuiles armoires ====== */
