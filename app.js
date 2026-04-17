@@ -434,7 +434,7 @@ function bindNavEvents() {
     if (action === "tutorial") {
       e.preventDefault();
       closeDrawer();
-      openTutorialModal();
+      requestAnimationFrame(() => openTutorialModal());
       return;
     }
     if (action === "logout") {
@@ -1017,7 +1017,7 @@ function setTutorialModalOpen(open) {
   overlay.hidden = !open;
   modal.hidden = !open;
   modal.setAttribute("aria-hidden", open ? "false" : "true");
-  document.body.classList.toggle("modal-open", open);
+  document.body.classList.toggle("tutorial-open", open);
 }
 
 function getTutorialSection(sectionKey = state.tutorialModal.sectionKey) {
