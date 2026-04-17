@@ -694,18 +694,25 @@ body[data-theme="dark"] mark.hl{
   background: rgba(255,255,255,.04);
   color: var(--text);
   text-align: left;
-  overflow: hidden;
   cursor: pointer;
+  transition: border-color .12s ease, background .12s ease, transform .12s ease;
 }
-.tutorial-category-image{
-  display:block;
-  width:100%;
-  aspect-ratio: 9 / 16;
-  object-fit: cover;
-  background: rgba(255,255,255,.03);
+.tutorial-category-card:hover{
+  border-color: rgba(79,156,255,.55);
+  background: rgba(79,156,255,.10);
+  transform: translateY(-1px);
 }
 .tutorial-category-body{
-  padding: 10px 12px 12px;
+  padding: 14px 14px 12px;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.tutorial-category-cta{
+  margin-top: 4px;
+  color: rgba(96,165,250,.95);
+  font-size: 13px;
+  font-weight: 700;
 }
 .tutorial-viewer{
   flex: 1;
@@ -732,15 +739,20 @@ body[data-theme="dark"] mark.hl{
   display:flex;
   align-items:center;
   justify-content:center;
+  padding: 8px 0;
   border-radius: 8px;
-  background: rgba(255,255,255,.03);
+  background: transparent;
   overflow: hidden;
 }
 .tutorial-slide-image{
-  width:100%;
-  height:100%;
+  width: auto;
+  height: 100%;
+  max-width: min(100%, 460px);
+  max-height: 100%;
   object-fit: contain;
-  background: #000;
+  border-radius: 8px;
+  background: rgba(255,255,255,.02);
+  box-shadow: 0 12px 30px rgba(0,0,0,.28);
 }
 .tutorial-caption{
   margin-top: 10px;
@@ -767,6 +779,9 @@ body[data-theme="dark"] mark.hl{
   .tutorial-actions .btn,
   .tutorial-toolbar .btn{
     min-height: 42px;
+  }
+  .tutorial-slide-image{
+    max-width: 100%;
   }
 }
 /* ====== ACCUEIL: tuiles armoires ====== */

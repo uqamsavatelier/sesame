@@ -1029,10 +1029,10 @@ function renderTutorialCategories() {
   if (!grid) return;
   grid.innerHTML = TUTORIAL_SECTIONS.map((section) => `
     <button class="tutorial-category-card" type="button" data-tutorial-section="${escapeHtml(section.key)}">
-      <img class="tutorial-category-image" src="${escapeHtml(encodeURI(section.slides[0].image))}" alt="${escapeHtml(section.label)}" loading="lazy" />
       <div class="tutorial-category-body">
         <div class="title">${escapeHtml(section.label)}</div>
         <div class="muted">${section.slideCount} étapes</div>
+        <div class="tutorial-category-cta">Ouvrir</div>
       </div>
     </button>
   `).join("");
