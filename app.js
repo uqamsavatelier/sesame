@@ -816,26 +816,51 @@ function setStatus(msg) {
 
 
 const PAGE_SIZE = 50;
-function buildTutorialSlides(section) {
-  const stepVariants = Array.isArray(section.stepVariants)
-    ? section.stepVariants
-    : Array.from({ length: section.slideCount }, () => 0);
-  const slides = [];
+const TUTORIAL_BASE_PATHS = ["./Démo", "./ressources/Démo"];
+const tutorialBasePathCache = new Map();
 
-  stepVariants.forEach((variantCount, index) => {
-    const stepNo = index + 1;
-    slides.push({
-      title: `${section.label} — étape ${stepNo}`,
-      image: `./Démo/${section.folder}/step${stepNo}.jpg`,
-    });
-    for (let variant = 1; variant <= Number(variantCount || 0); variant += 1) {
+function probeImage(url) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(true);
+    img.onerror = () => resolve(false);
+    img.src = encodeURI(url);
+  });
+}
+
+async function resolveTutorialBasePath(folder) {
+  if (tutorialBasePathCache.has(folder)) return tutorialBasePathCache.get(folder);
+  for (const basePath of TUTORIAL_BASE_PATHS) {
+    const probe = await probeImage(`${basePath}/${folder}/step1.jpg`);
+    if (!probe) continue;
+    tutorialBasePathCache.set(folder, basePath);
+    return basePath;
+  }
+  const fallback = TUTORIAL_BASE_PATHS[0];
+  tutorialBasePathCache.set(folder, fallback);
+  return fallback;
+}
+
+async function buildTutorialSlides(section) {
+  const basePath = await resolveTutorialBasePath(section.folder);
+  const slides = [];
+  for (let stepNo = 1; stepNo <= Number(section.slideCount || 0); stepNo += 1) {
+    const baseImage = `${basePath}/${section.folder}/step${stepNo}.jpg`;
+    if (await probeImage(baseImage)) {
       slides.push({
         title: `${section.label} — étape ${stepNo}`,
-        image: `./Démo/${section.folder}/step${stepNo}-tx${variant}.jpg`,
+        image: baseImage,
       });
     }
-  });
-
+    for (let variant = 1; variant <= 12; variant += 1) {
+      const variantImage = `${basePath}/${section.folder}/step${stepNo}-tx${variant}.jpg`;
+      if (!(await probeImage(variantImage))) break;
+      slides.push({
+        title: `${section.label} — étape ${stepNo}`,
+        image: variantImage,
+      });
+    }
+  }
   return slides;
 }
 
@@ -845,47 +870,38 @@ const TUTORIAL_SECTIONS = [
     label: "Créer un compte",
     folder: "Creer-compte",
     slideCount: 11,
-    stepVariants: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   },
   {
     key: "borrow-return",
     label: "Effectuer un emprunt ou un retour",
     folder: "Emprunter-retourner",
     slideCount: 7,
-    stepVariants: [0, 0, 0, 0, 0, 0, 0],
   },
   {
     key: "navigation",
     label: "Comment naviguer",
     folder: "Navigation",
     slideCount: 11,
-    stepVariants: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   },
   {
     key: "suggestion",
     label: "Faire une suggestion",
     folder: "Suggestions",
     slideCount: 7,
-    stepVariants: [0, 0, 0, 0, 0, 0, 0],
   },
   {
     key: "missing-key",
     label: "Signaler la disparition d'une clé",
     folder: "Signalez-disparue",
     slideCount: 10,
-    stepVariants: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   },
   {
     key: "search",
     label: "Comment effectuer une recherche",
     folder: "Recherche",
     slideCount: 5,
-    stepVariants: [0, 0, 0, 0, 0],
   },
-].map((section) => ({
-  ...section,
-  slides: buildTutorialSlides(section),
-}));
+];
 
 let state = {
   role: "new_user",
@@ -988,6 +1004,8 @@ let state = {
     open: false,
     sectionKey: null,
     slideIndex: 0,
+    slides: [],
+    loading: false,
   },
   rolePermissions: defaultPermissionsForRole("new_user"),
 };
@@ -1073,27 +1091,47 @@ function renderTutorialModal() {
     home.hidden = false;
     viewer.hidden = true;
     sectionTitle.textContent = "Comment utiliser Sésame";
+    image.hidden = false;
+    nextBtn.hidden = true;
     renderTutorialCategories();
     return;
   }
 
-  const slideIndex = Math.max(0, Math.min(state.tutorialModal.slideIndex, section.slides.length - 1));
+  const slides = Array.isArray(state.tutorialModal.slides) ? state.tutorialModal.slides : [];
+  const slideIndex = Math.max(0, Math.min(state.tutorialModal.slideIndex, Math.max(0, slides.length - 1)));
   state.tutorialModal.slideIndex = slideIndex;
-  const slide = section.slides[slideIndex];
+  const slide = slides[slideIndex] ?? null;
 
   home.hidden = true;
   viewer.hidden = false;
   sectionTitle.textContent = section.label;
+  if (state.tutorialModal.loading) {
+    image.hidden = true;
+    nextBtn.hidden = true;
+    return;
+  }
+  if (!slide) {
+    image.hidden = true;
+    nextBtn.hidden = true;
+    return;
+  }
+  image.hidden = false;
   image.src = encodeURI(slide.image);
   image.alt = slide.title;
-  nextBtn.textContent = slideIndex >= section.slides.length - 1 ? "Fermer" : "Suivant";
+  nextBtn.hidden = false;
+  nextBtn.textContent = slideIndex >= slides.length - 1 ? "Fermer" : "Suivant";
 }
 
-function openTutorialSection(sectionKey) {
+async function openTutorialSection(sectionKey) {
   const section = getTutorialSection(sectionKey);
   if (!section) return;
   state.tutorialModal.sectionKey = section.key;
   state.tutorialModal.slideIndex = 0;
+  state.tutorialModal.slides = [];
+  state.tutorialModal.loading = true;
+  renderTutorialModal();
+  state.tutorialModal.slides = await buildTutorialSlides(section);
+  state.tutorialModal.loading = false;
   renderTutorialModal();
 }
 
@@ -1102,10 +1140,12 @@ function openTutorialModal(sectionKey = null) {
   state.tutorialModal.open = true;
   state.tutorialModal.sectionKey = null;
   state.tutorialModal.slideIndex = 0;
+  state.tutorialModal.slides = [];
+  state.tutorialModal.loading = false;
   renderTutorialModal();
   setTutorialModalOpen(true);
   openTrackedModal("tutorial", wasOpen);
-  if (sectionKey) openTutorialSection(sectionKey);
+  if (sectionKey) void openTutorialSection(sectionKey);
 }
 
 function closeTutorialModal(options = {}) {
@@ -1113,6 +1153,8 @@ function closeTutorialModal(options = {}) {
     state.tutorialModal.open = false;
     state.tutorialModal.sectionKey = null;
     state.tutorialModal.slideIndex = 0;
+    state.tutorialModal.slides = [];
+    state.tutorialModal.loading = false;
     setTutorialModalOpen(false);
     const image = $("tutorialSlideImage");
     if (image) {
@@ -1125,6 +1167,8 @@ function closeTutorialModal(options = {}) {
 function goToTutorialHome() {
   state.tutorialModal.sectionKey = null;
   state.tutorialModal.slideIndex = 0;
+  state.tutorialModal.slides = [];
+  state.tutorialModal.loading = false;
   const image = $("tutorialSlideImage");
   if (image) {
     image.removeAttribute("src");
@@ -1135,10 +1179,11 @@ function goToTutorialHome() {
 
 function moveTutorialSlide(delta) {
   const section = getTutorialSection();
+  const slides = Array.isArray(state.tutorialModal.slides) ? state.tutorialModal.slides : [];
   if (!section) return;
   const nextIndex = state.tutorialModal.slideIndex + delta;
   if (nextIndex < 0) return;
-  if (nextIndex >= section.slides.length) {
+  if (nextIndex >= slides.length) {
     goToTutorialHome();
     return;
   }
@@ -4770,7 +4815,7 @@ $("m_is_keyring").addEventListener("change", (e) => {
     if (!card) return;
     const sectionKey = String(card.dataset.tutorialSection || "").trim();
     if (!sectionKey) return;
-    openTutorialSection(sectionKey);
+    void openTutorialSection(sectionKey);
   });
   document.addEventListener("keydown", (e) => {
     if (!state.tutorialModal.open) return;
