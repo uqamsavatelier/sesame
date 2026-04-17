@@ -1069,9 +1069,12 @@ function buildKeyTicketLines(k, query = "") {
     return query ? highlightText(text, query) : escapeHtml(text);
   };
 
+  const primaryLocation = String(k.local ?? "").trim()
+    ? k.local
+    : getPavilionDisplayForKey(k);
+
   const line1 = [
-    getPavilionDisplayForKey(k),
-    k.local,
+    primaryLocation,
     k.departement,
   ]
     .map(formatPart)

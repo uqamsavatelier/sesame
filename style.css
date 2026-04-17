@@ -1051,6 +1051,9 @@ body[data-theme="dark"] mark.hl{
   gap:6px;
   flex-wrap:wrap;
 }
+.key-row .muted{
+  line-height: 1.35;
+}
 .key-check{
   transform: translateY(1px);
   display: none;
@@ -1061,6 +1064,42 @@ body[data-theme="dark"] mark.hl{
 .key-row.selected{
   border-color: rgba(79,156,255,.55);
   box-shadow: 0 0 0 1px rgba(79,156,255,.35) inset;
+}
+@media (max-width: 680px){
+  .key-row{
+    align-items:flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px;
+  }
+  .key-row > .kpill{
+    order: 1;
+    flex: 0 1 auto;
+    max-width: calc(100% - 108px);
+  }
+  .key-row > .key-check{
+    order: 0;
+    margin-top: 6px;
+  }
+  .key-row .key-actions{
+    order: 2;
+    margin-left: auto;
+    flex: 0 0 auto;
+    justify-content: flex-end;
+  }
+  .key-row .key-actions .btn{
+    min-height: 36px;
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+  .key-row .key-main{
+    order: 3;
+    flex: 0 0 100%;
+    width: 100%;
+    padding-top: 8px;
+    margin-top: 2px;
+    border-top: 1px solid rgba(148,163,184,.20);
+  }
 }
 .icon-btn{
   width: 32px;
