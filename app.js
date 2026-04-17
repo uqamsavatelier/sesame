@@ -1037,13 +1037,11 @@ function renderTutorialCategories() {
 function renderTutorialModal() {
   const home = $("tutorialHome");
   const viewer = $("tutorialViewer");
-  const progress = $("tutorialProgress");
-  const title = $("tutorialSlideTitle");
   const image = $("tutorialSlideImage");
   const nextBtn = $("tutorialNext");
   const sectionTitle = $("tutorialSectionTitle");
   const section = getTutorialSection();
-  if (!home || !viewer || !progress || !title || !image || !nextBtn || !sectionTitle) return;
+  if (!home || !viewer || !image || !nextBtn || !sectionTitle) return;
 
   if (!section) {
     home.hidden = false;
@@ -1060,8 +1058,6 @@ function renderTutorialModal() {
   home.hidden = true;
   viewer.hidden = false;
   sectionTitle.textContent = section.label;
-  progress.textContent = `${slideIndex + 1} / ${section.slides.length}`;
-  title.textContent = slide.title;
   image.src = encodeURI(slide.image);
   image.alt = slide.title;
   nextBtn.textContent = slideIndex >= section.slides.length - 1 ? "Fermer" : "Suivant";
@@ -1100,13 +1096,24 @@ function closeTutorialModal(options = {}) {
   }, options);
 }
 
+function goToTutorialHome() {
+  state.tutorialModal.sectionKey = null;
+  state.tutorialModal.slideIndex = 0;
+  const image = $("tutorialSlideImage");
+  if (image) {
+    image.removeAttribute("src");
+    image.alt = "";
+  }
+  renderTutorialModal();
+}
+
 function moveTutorialSlide(delta) {
   const section = getTutorialSection();
   if (!section) return;
   const nextIndex = state.tutorialModal.slideIndex + delta;
   if (nextIndex < 0) return;
   if (nextIndex >= section.slides.length) {
-    closeTutorialModal();
+    goToTutorialHome();
     return;
   }
   state.tutorialModal.slideIndex = nextIndex;
