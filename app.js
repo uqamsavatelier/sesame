@@ -26,6 +26,7 @@ import {
   countOpenSuggestions,
   countPendingUsers,
   countOpenLoansByBorrower,
+  listLoansByBorrower,
   rpcAdminCreateLoan,
   rpcAdminCreateKeyringLoan,
 } from "./api.js";
@@ -816,6 +817,9 @@ let state = {
   loansByKey: new Map(),
   borrowersById: new Map(),
   missingByKey: new Map(),
+  favoriteStatsByKeyId: new Map(),
+  favoriteKeyIds: [],
+  keysTab: "all",
   q: "",
   page: 0,
   hookModal: {
@@ -1105,6 +1109,171 @@ function formatKey(k) {
 function formatKeyTag(k) {
   const b = k.key_no ? `#${k.key_no}` : "";
   return b || `Clé ${k.id}`;
+}
+
+function getKeyringLabelForKey(key) {
+  const keyringId = Number(key?.keyring_id);
+  if (!Number.isFinite(keyringId) || keyringId <= 0) return "";
+  const keyring = state.keyrings.find((row) => Number(row.id) === keyringId);
+  if (!keyring) return "";
+  const code = String(keyring.ring_code ?? "A").trim() || "A";
+  const name = String(keyring.name ?? "").trim();
+  return `Trousseau ${code}${name ? ` (${name})` : ""}`;
+}
+
+function matchesKeySearch(key, query) {
+  if (!query) return true;
+  const haystack = [
+    key?.hook_no,
+    key?.key_no,
+    key?.local,
+    key?.departement,
+    key?.utilisation,
+    key?.remarque,
+    getPavilionDisplayForKey(key),
+    getKeyringLabelForKey(key),
+  ]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean)
+    .join(" ");
+  return normalizeText(haystack).includes(normalizeText(query));
+}
+
+function formatFavoriteBorrowCount(count) {
+  const n = Math.max(0, Number(count) || 0);
+  return `${n} ${n > 1 ? "emprunts" : "emprunt"}`;
+}
+
+async function loadFavoriteStatsForCabinet() {
+  state.favoriteStatsByKeyId = new Map();
+  state.favoriteKeyIds = [];
+
+  const borrowerId = String(state.profile?.id ?? "").trim();
+  if (!borrowerId || !state.keys.length) return;
+
+  try {
+    const loans = await listLoansByBorrower(borrowerId);
+    const currentKeyIds = new Set(
+      state.keys
+        .map((key) => Number(key.id))
+        .filter((id) => Number.isFinite(id))
+    );
+    const stats = new Map();
+    for (const loan of loans) {
+      const keyId = Number(loan?.key_id);
+      if (!Number.isFinite(keyId) || !currentKeyIds.has(keyId)) continue;
+      const current = stats.get(keyId) ?? { count: 0, lastLoanedAt: "" };
+      current.count += 1;
+      const loanedAt = String(loan?.loaned_at ?? "");
+      if (loanedAt && (!current.lastLoanedAt || loanedAt > current.lastLoanedAt)) {
+        current.lastLoanedAt = loanedAt;
+      }
+      stats.set(keyId, current);
+    }
+
+    const keyById = new Map(state.keys.map((key) => [Number(key.id), key]));
+    state.favoriteStatsByKeyId = stats;
+    state.favoriteKeyIds = [...stats.entries()]
+      .sort((a, b) => {
+        const countDiff = b[1].count - a[1].count;
+        if (countDiff) return countDiff;
+        const dateA = String(a[1].lastLoanedAt ?? "");
+        const dateB = String(b[1].lastLoanedAt ?? "");
+        if (dateA !== dateB) return dateA < dateB ? 1 : -1;
+        const keyA = keyById.get(Number(a[0]));
+        const keyB = keyById.get(Number(b[0]));
+        const numberDiff = compareKeyNo(keyA, keyB);
+        if (numberDiff) return numberDiff;
+        return Number(keyA?.hook_no ?? 0) - Number(keyB?.hook_no ?? 0);
+      })
+      .map(([keyId]) => Number(keyId));
+  } catch (err) {
+    console.warn("[favorites] lecture impossible", err?.message ?? err);
+  }
+}
+
+function setKeysTab(tab) {
+  const nextTab = tab === "favorites" ? "favorites" : "all";
+  if (state.keysTab === nextTab) {
+    renderKeyViewTabs();
+    return;
+  }
+  state.keysTab = nextTab;
+  state.page = 0;
+  render();
+}
+
+function renderKeyViewTabs() {
+  $("tabAllKeys")?.classList.toggle("active", state.keysTab !== "favorites");
+  $("tabFavorites")?.classList.toggle("active", state.keysTab === "favorites");
+}
+
+function getFavoriteEntries() {
+  const keyById = new Map(state.keys.map((key) => [Number(key.id), key]));
+  return state.favoriteKeyIds
+    .map((keyId) => {
+      const key = keyById.get(Number(keyId));
+      const stat = state.favoriteStatsByKeyId.get(Number(keyId));
+      if (!key || !stat) return null;
+      return { key, stat };
+    })
+    .filter(Boolean)
+    .filter(({ key }) => matchesKeySearch(key, state.q));
+}
+
+function renderFavorites() {
+  const items = getFavoriteEntries();
+  const total = items.length;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  state.page = Math.max(0, Math.min(state.page, pageCount - 1));
+
+  const start = state.page * PAGE_SIZE;
+  const pageItems = items.slice(start, start + PAGE_SIZE);
+  renderPager(pageCount, total);
+
+  $("pageInfo").textContent = `Page ${state.page + 1} / ${pageCount} — ${total} favoris`;
+
+  const html = pageItems
+    .map(({ key, stat }) => {
+      const hookNo = Number(key.hook_no);
+      const loan = state.loansByKey?.get(key.id);
+      const statusClass = key.is_missing ? "kpill missing" : (loan ? "kpill onloan" : "kpill");
+      const statusLabel = key.is_missing ? "Signalée disparue" : (loan ? "Empruntée" : "Disponible");
+      const ticketLines = buildKeyTicketLines(key, state.q);
+      const keyringLabel = getKeyringLabelForKey(key);
+      const keyringText = keyringLabel
+        ? (state.q ? highlightText(keyringLabel, state.q) : escapeHtml(keyringLabel))
+        : "";
+      const favoriteMeta = [
+        formatFavoriteBorrowCount(stat.count),
+        stat.lastLoanedAt ? `dernier le ${escapeHtml(formatDateFr(stat.lastLoanedAt))}` : "",
+      ].filter(Boolean).join(" • ");
+      const loanLine = loan
+        ? `Empruntée par ${escapeHtml(loanBorrowerLabel(loan))} le ${escapeHtml(formatDateFr(loan.loaned_at))}`
+        : "";
+      return `
+        <div class="item clickable" data-hook-no="${Number.isFinite(hookNo) ? hookNo : 0}">
+          <div class="item-header">
+            <div>
+              <div class="title">Crochet #${Number.isFinite(hookNo) ? hookNo : "?"} - Clé ${escapeHtml(formatKeyTag(key))}</div>
+              <div class="sub">${favoriteMeta}</div>
+            </div>
+            <span class="${statusClass}">${statusLabel}</span>
+          </div>
+          ${ticketLines.line1 ? `<div class="kdetail" style="padding-left:0; margin-top:10px;">${ticketLines.line1}</div>` : ""}
+          ${ticketLines.line2 ? `<div class="kdetail" style="padding-left:0; margin-top:4px;">${ticketLines.line2}</div>` : ""}
+          ${keyringText ? `<div class="kdetail" style="padding-left:0; margin-top:4px;">${keyringText}</div>` : ""}
+          ${loanLine ? `<div class="kdetail" style="padding-left:0; margin-top:4px;">${loanLine}</div>` : ""}
+        </div>
+      `;
+    })
+    .join("");
+
+  const emptyMessage = state.favoriteKeyIds.length
+    ? "Aucun résultat dans vos favoris."
+    : "Aucun favori dans cette armoire pour l'instant.";
+  $("list").innerHTML = html || `<div class="muted" style="padding:12px;">${emptyMessage}</div>`;
+  maybeOpenQrLoanPrompt();
 }
 
 function hookTarget(cabinetId, hookNo) {
@@ -1430,6 +1599,7 @@ async function loadDataForCabinet() {
 
   await loadLoansForKeys();
   await loadMissingForKeys();
+  await loadFavoriteStatsForCabinet();
 }
 
 function updateSessionInfoCabinet() {
@@ -2566,6 +2736,11 @@ async function refreshAfterAction() {
 
 
 function render() {
+  renderKeyViewTabs();
+  if (state.keysTab === "favorites") {
+    renderFavorites();
+    return;
+  }
 
   const grouped = groupByHook(state.keys);
   const ringsByHook = buildKeyringsByHook();
@@ -3173,6 +3348,8 @@ $("tabManual").addEventListener("click", () => setTab("manual"));
     e.preventDefault();
     e.currentTarget.blur();
   });
+  $("tabAllKeys").addEventListener("click", () => setKeysTab("all"));
+  $("tabFavorites").addEventListener("click", () => setKeysTab("favorites"));
 
   function onPagerClick(e) {
     const btn = e.target.closest("button.page-link[data-page]");
