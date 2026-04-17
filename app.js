@@ -431,6 +431,12 @@ function bindNavEvents() {
     if (!a) return;
 
     const action = a.dataset.action || "";
+    if (action === "tutorial") {
+      e.preventDefault();
+      closeDrawer();
+      openTutorialModal();
+      return;
+    }
     if (action === "logout") {
       e.preventDefault();
       closeDrawer();
@@ -456,6 +462,7 @@ function buildNavLinks(role) {
     return [
       { label: cabinetLabel, href: buildQrCabinetHref(cabinetId) },
       { label: "Mes emprunts", href: buildQrLoansHref(cabinetId) },
+      { label: "Comment utiliser Sésame", action: "tutorial" },
       { label: "Déconnexion", action: "logout", danger: true },
     ];
   }
@@ -465,6 +472,7 @@ function buildNavLinks(role) {
       { label: "Clés", href: "./index.html" },
       { label: "Emprunts", href: "./loans.html" },
       { label: "Suggestions", href: "./suggestions.html", badge: Number(state.suggestionCount) || 0 },
+      { label: "Comment utiliser Sésame", action: "tutorial" },
     ];
     links.push({
       label: normalizedRole === "super_admin" ? "Configuration" : "Utilisateurs et audit",
@@ -483,6 +491,7 @@ function buildNavLinks(role) {
   if (normalizedRole === "consultant") {
     return [
       { label: "Liste des clés", href: "./index.html" },
+      { label: "Comment utiliser Sésame", action: "tutorial" },
       { label: "Déconnexion", action: "logout", danger: true },
     ];
   }
@@ -490,6 +499,7 @@ function buildNavLinks(role) {
   return [
     { label: "Liste des clés", href: "./index.html?mode=browse" },
     { label: `Mes emprunts (${Number(state.myOpenLoanCount) || 0})`, href: "./my-loans.html" },
+    { label: "Comment utiliser Sésame", action: "tutorial" },
     { label: "Déconnexion", action: "logout", danger: true },
   ];
 }
@@ -806,6 +816,51 @@ function setStatus(msg) {
 
 
 const PAGE_SIZE = 50;
+const TUTORIAL_SECTIONS = [
+  {
+    key: "create-account",
+    label: "Créer un compte",
+    folder: "Creer-compte",
+    slideCount: 11,
+  },
+  {
+    key: "borrow-return",
+    label: "Effectuer un emprunt ou un retour",
+    folder: "Emprunter-retourner",
+    slideCount: 7,
+  },
+  {
+    key: "navigation",
+    label: "Comment naviguer",
+    folder: "Navigation",
+    slideCount: 11,
+  },
+  {
+    key: "suggestion",
+    label: "Faire une suggestion",
+    folder: "Suggestions",
+    slideCount: 7,
+  },
+  {
+    key: "missing-key",
+    label: "Signaler la disparition d'une clé",
+    folder: "Signalez-disparue",
+    slideCount: 10,
+  },
+  {
+    key: "search",
+    label: "Comment effectuer une recherche",
+    folder: "Recherche",
+    slideCount: 5,
+  },
+].map((section) => ({
+  ...section,
+  slides: Array.from({ length: section.slideCount }, (_, index) => ({
+    title: `${section.label} — étape ${index + 1}`,
+    image: `./Démo/${section.folder}/step${index + 1}.jpg`,
+  })),
+}));
+
 let state = {
   role: "new_user",
   profile: null,
@@ -903,6 +958,11 @@ let state = {
     open: false,
     cabinetId: null,
   },
+  tutorialModal: {
+    open: false,
+    sectionKey: null,
+    slideIndex: 0,
+  },
   rolePermissions: defaultPermissionsForRole("new_user"),
 };
 
@@ -950,6 +1010,123 @@ function closeTrackedModal(modalId, performClose, options = {}) {
   return true;
 }
 
+function setTutorialModalOpen(open) {
+  const overlay = $("tutorialOverlay");
+  const modal = $("tutorialModal");
+  if (!overlay || !modal) return;
+  overlay.hidden = !open;
+  modal.hidden = !open;
+  modal.setAttribute("aria-hidden", open ? "false" : "true");
+  document.body.classList.toggle("modal-open", open);
+}
+
+function getTutorialSection(sectionKey = state.tutorialModal.sectionKey) {
+  return TUTORIAL_SECTIONS.find((section) => section.key === sectionKey) ?? null;
+}
+
+function renderTutorialCategories() {
+  const grid = $("tutorialCategoryGrid");
+  if (!grid) return;
+  grid.innerHTML = TUTORIAL_SECTIONS.map((section) => `
+    <button class="tutorial-category-card" type="button" data-tutorial-section="${escapeHtml(section.key)}">
+      <img class="tutorial-category-image" src="${escapeHtml(encodeURI(section.slides[0].image))}" alt="${escapeHtml(section.label)}" loading="lazy" />
+      <div class="tutorial-category-body">
+        <div class="title">${escapeHtml(section.label)}</div>
+        <div class="muted">${section.slideCount} étapes</div>
+      </div>
+    </button>
+  `).join("");
+}
+
+function renderTutorialModal() {
+  const home = $("tutorialHome");
+  const viewer = $("tutorialViewer");
+  const progress = $("tutorialProgress");
+  const title = $("tutorialSlideTitle");
+  const image = $("tutorialSlideImage");
+  const prevBtn = $("tutorialPrev");
+  const nextBtn = $("tutorialNext");
+  const backBtn = $("tutorialBackToSections");
+  const sectionTitle = $("tutorialSectionTitle");
+  const section = getTutorialSection();
+  if (!home || !viewer || !progress || !title || !image || !prevBtn || !nextBtn || !backBtn || !sectionTitle) return;
+
+  if (!section) {
+    home.hidden = false;
+    viewer.hidden = true;
+    sectionTitle.textContent = "Comment utiliser Sésame";
+    renderTutorialCategories();
+    return;
+  }
+
+  const slideIndex = Math.max(0, Math.min(state.tutorialModal.slideIndex, section.slides.length - 1));
+  state.tutorialModal.slideIndex = slideIndex;
+  const slide = section.slides[slideIndex];
+
+  home.hidden = true;
+  viewer.hidden = false;
+  sectionTitle.textContent = section.label;
+  progress.textContent = `${slideIndex + 1} / ${section.slides.length}`;
+  title.textContent = slide.title;
+  image.src = encodeURI(slide.image);
+  image.alt = slide.title;
+  prevBtn.disabled = slideIndex === 0;
+  nextBtn.textContent = slideIndex >= section.slides.length - 1 ? "Terminer" : "Suivant";
+  backBtn.hidden = false;
+}
+
+function openTutorialSection(sectionKey) {
+  const section = getTutorialSection(sectionKey);
+  if (!section) return;
+  state.tutorialModal.sectionKey = section.key;
+  state.tutorialModal.slideIndex = 0;
+  renderTutorialModal();
+}
+
+function openTutorialModal(sectionKey = null) {
+  const wasOpen = state.tutorialModal.open;
+  state.tutorialModal.open = true;
+  state.tutorialModal.sectionKey = null;
+  state.tutorialModal.slideIndex = 0;
+  renderTutorialModal();
+  setTutorialModalOpen(true);
+  openTrackedModal("tutorial", wasOpen);
+  if (sectionKey) openTutorialSection(sectionKey);
+}
+
+function closeTutorialModal(options = {}) {
+  closeTrackedModal("tutorial", () => {
+    state.tutorialModal.open = false;
+    state.tutorialModal.sectionKey = null;
+    state.tutorialModal.slideIndex = 0;
+    setTutorialModalOpen(false);
+    const image = $("tutorialSlideImage");
+    if (image) {
+      image.removeAttribute("src");
+      image.alt = "";
+    }
+  }, options);
+}
+
+function goToTutorialHome() {
+  state.tutorialModal.sectionKey = null;
+  state.tutorialModal.slideIndex = 0;
+  renderTutorialModal();
+}
+
+function moveTutorialSlide(delta) {
+  const section = getTutorialSection();
+  if (!section) return;
+  const nextIndex = state.tutorialModal.slideIndex + delta;
+  if (nextIndex < 0) return;
+  if (nextIndex >= section.slides.length) {
+    goToTutorialHome();
+    return;
+  }
+  state.tutorialModal.slideIndex = nextIndex;
+  renderTutorialModal();
+}
+
 function syncModalHistoryToBrowserState() {
   const historyToken = getCurrentHistoryModalToken();
   while (modalHistory.stack.length) {
@@ -965,6 +1142,7 @@ function syncModalHistoryToBrowserState() {
 }
 
 window.addEventListener("popstate", syncModalHistoryToBrowserState);
+registerModalCloseHandler("tutorial", closeTutorialModal);
 registerModalCloseHandler("qrLoanPrompt", closeQrLoanPrompt);
 registerModalCloseHandler("cabinetEdit", closeCabinetEditModal);
 registerModalCloseHandler("cabinetCreate", closeCabinetCreateModal);
@@ -4562,6 +4740,35 @@ $("m_is_keyring").addEventListener("change", (e) => {
       cancelBtn.disabled = false;
       keepBtn.disabled = false;
       closeBtn.disabled = false;
+    }
+  });
+
+  $("tutorialClose").addEventListener("click", closeTutorialModal);
+  $("tutorialOverlay").addEventListener("click", closeTutorialModal);
+  $("tutorialBackToSections").addEventListener("click", goToTutorialHome);
+  $("tutorialPrev").addEventListener("click", () => moveTutorialSlide(-1));
+  $("tutorialNext").addEventListener("click", () => moveTutorialSlide(1));
+  $("tutorialCategoryGrid").addEventListener("click", (e) => {
+    const card = e.target.closest("[data-tutorial-section]");
+    if (!card) return;
+    const sectionKey = String(card.dataset.tutorialSection || "").trim();
+    if (!sectionKey) return;
+    openTutorialSection(sectionKey);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (!state.tutorialModal.open) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closeTutorialModal();
+      return;
+    }
+    if (!state.tutorialModal.sectionKey) return;
+    if (e.key === "ArrowRight") {
+      e.preventDefault();
+      moveTutorialSlide(1);
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      moveTutorialSlide(-1);
     }
   });
 

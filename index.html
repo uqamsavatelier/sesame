@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Gestion clés — Accueil</title>
-  <link rel="stylesheet" href="./style.css?v=20260417a" />
+  <link rel="stylesheet" href="./style.css?v=20260417b" />
 </head>
 <body class="loading">
 
@@ -110,6 +110,47 @@
   </section>
 
 </main>
+
+<div id="tutorialOverlay" class="tutorial-overlay" hidden></div>
+<section id="tutorialModal" class="tutorial-modal" hidden aria-hidden="true">
+  <div class="tutorial-shell">
+    <div class="tutorial-topbar">
+      <div>
+        <div class="muted">Guide rapide</div>
+        <div class="title" id="tutorialSectionTitle">Comment utiliser Sésame</div>
+      </div>
+      <button id="tutorialClose" class="tutorial-close" type="button" aria-label="Fermer">×</button>
+    </div>
+
+    <div id="tutorialHome" class="tutorial-home">
+      <div class="tutorial-home-copy">
+        <div class="title">Comment utiliser Sésame</div>
+        <div class="muted">Choisis une catégorie pour lancer le diaporama.</div>
+      </div>
+      <div id="tutorialCategoryGrid" class="tutorial-category-grid"></div>
+    </div>
+
+    <div id="tutorialViewer" class="tutorial-viewer" hidden>
+      <div class="tutorial-toolbar">
+        <button id="tutorialBackToSections" class="btn secondary reactive" type="button">Sections</button>
+        <div id="tutorialProgress" class="tutorial-progress">1 / 1</div>
+      </div>
+
+      <div class="tutorial-stage">
+        <img id="tutorialSlideImage" class="tutorial-slide-image" alt="" />
+      </div>
+
+      <div class="tutorial-caption">
+        <div id="tutorialSlideTitle" class="muted">—</div>
+      </div>
+
+      <div class="tutorial-actions">
+        <button id="tutorialPrev" class="btn secondary reactive" type="button">Précédent</button>
+        <button id="tutorialNext" class="btn reactive" type="button">Suivant</button>
+      </div>
+    </div>
+  </div>
+</section>
 
 <!-- ===================== MODAL : Éditer armoire ===================== -->
 <div id="cabinetEditOverlay" class="edit-overlay" hidden></div>
@@ -730,7 +771,7 @@
   <div class="app-version"></div>
 
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script type="module" src="./app.js?v=20260417e"></script>
+  <script type="module" src="./app.js?v=20260417h"></script>
 <script type="module" src="./version.js?v=20260415a"></script>
 </body>
 </html>
