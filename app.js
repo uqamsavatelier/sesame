@@ -817,6 +817,7 @@ let state = {
   loansByKey: new Map(),
   borrowersById: new Map(),
   missingByKey: new Map(),
+  favoriteEntries: [],
   favoriteStatsByKeyId: new Map(),
   favoriteKeyIds: [],
   keysTab: "all",
@@ -1145,6 +1146,7 @@ function formatFavoriteBorrowCount(count) {
 }
 
 async function loadFavoriteStatsForCabinet() {
+  state.favoriteEntries = [];
   state.favoriteStatsByKeyId = new Map();
   state.favoriteKeyIds = [];
 
@@ -1153,25 +1155,91 @@ async function loadFavoriteStatsForCabinet() {
 
   try {
     const loans = await listLoansByBorrower(borrowerId);
+    const keyById = new Map(state.keys.map((key) => [Number(key.id), key]));
+    const keyringById = new Map(state.keyrings.map((keyring) => [Number(keyring.id), keyring]));
     const currentKeyIds = new Set(
       state.keys
         .map((key) => Number(key.id))
         .filter((id) => Number.isFinite(id))
     );
+    const favoriteEntries = [];
+    const keyStats = new Map();
+    const ringStats = new Map();
     const stats = new Map();
     for (const loan of loans) {
       const keyId = Number(loan?.key_id);
       if (!Number.isFinite(keyId) || !currentKeyIds.has(keyId)) continue;
+      const key = keyById.get(keyId);
+      if (!key) continue;
+      const keyringId = Number(key.keyring_id);
+      const keyring = keyringById.get(keyringId);
+      const loanedAt = String(loan?.loaned_at ?? "");
+      if (Number.isFinite(keyringId) && keyringId > 0 && keyring) {
+        const currentRing = ringStats.get(keyringId) ?? {
+          type: "ring",
+          keyringId,
+          keyring,
+          keys: state.keys
+            .filter((row) => Number(row.keyring_id) === keyringId)
+            .sort(sortKeysByNo),
+          countSignatures: new Set(),
+          lastLoanedAt: "",
+        };
+        currentRing.countSignatures.add(loanedAt || `loan:${loan.id ?? "?"}`);
+        if (loanedAt && (!currentRing.lastLoanedAt || loanedAt > currentRing.lastLoanedAt)) {
+          currentRing.lastLoanedAt = loanedAt;
+        }
+        ringStats.set(keyringId, currentRing);
+        continue;
+      }
+
+      const currentKey = keyStats.get(keyId) ?? {
+        type: "key",
+        key,
+        count: 0,
+        lastLoanedAt: "",
+      };
+      currentKey.count += 1;
+      if (loanedAt && (!currentKey.lastLoanedAt || loanedAt > currentKey.lastLoanedAt)) {
+        currentKey.lastLoanedAt = loanedAt;
+      }
+      keyStats.set(keyId, currentKey);
+
       const current = stats.get(keyId) ?? { count: 0, lastLoanedAt: "" };
       current.count += 1;
-      const loanedAt = String(loan?.loaned_at ?? "");
       if (loanedAt && (!current.lastLoanedAt || loanedAt > current.lastLoanedAt)) {
         current.lastLoanedAt = loanedAt;
       }
       stats.set(keyId, current);
     }
 
-    const keyById = new Map(state.keys.map((key) => [Number(key.id), key]));
+    for (const entry of ringStats.values()) {
+      favoriteEntries.push({
+        ...entry,
+        count: entry.countSignatures.size,
+      });
+    }
+    for (const entry of keyStats.values()) {
+      favoriteEntries.push(entry);
+    }
+
+    favoriteEntries.sort((a, b) => {
+      const countDiff = Number(b.count ?? 0) - Number(a.count ?? 0);
+      if (countDiff) return countDiff;
+      const dateA = String(a.lastLoanedAt ?? "");
+      const dateB = String(b.lastLoanedAt ?? "");
+      if (dateA !== dateB) return dateA < dateB ? 1 : -1;
+      if (a.type === "ring" && b.type === "key") return -1;
+      if (a.type === "key" && b.type === "ring") return 1;
+      if (a.type === "ring" && b.type === "ring") {
+        const hookDiff = Number(a.keyring?.hook_no ?? 0) - Number(b.keyring?.hook_no ?? 0);
+        if (hookDiff) return hookDiff;
+        return String(a.keyring?.ring_code ?? "").localeCompare(String(b.keyring?.ring_code ?? ""), "fr-CA");
+      }
+      return compareKeyNo(a.key, b.key) || (Number(a.key?.hook_no ?? 0) - Number(b.key?.hook_no ?? 0));
+    });
+
+    state.favoriteEntries = favoriteEntries;
     state.favoriteStatsByKeyId = stats;
     state.favoriteKeyIds = [...stats.entries()]
       .sort((a, b) => {
@@ -1209,16 +1277,29 @@ function renderKeyViewTabs() {
 }
 
 function getFavoriteEntries() {
-  const keyById = new Map(state.keys.map((key) => [Number(key.id), key]));
-  return state.favoriteKeyIds
-    .map((keyId) => {
-      const key = keyById.get(Number(keyId));
-      const stat = state.favoriteStatsByKeyId.get(Number(keyId));
-      if (!key || !stat) return null;
-      return { key, stat };
-    })
-    .filter(Boolean)
-    .filter(({ key }) => matchesKeySearch(key, state.q));
+  const query = state.q;
+  return state.favoriteEntries.filter((entry) => {
+    if (entry.type === "ring") {
+      if (!query) return true;
+      const haystack = [
+        entry.keyring?.hook_no,
+        entry.keyring?.ring_code,
+        entry.keyring?.name,
+        ...entry.keys.map((key) => [
+          key?.key_no,
+          key?.local,
+          key?.utilisation,
+          key?.remarque,
+          getPavilionDisplayForKey(key),
+        ].join(" ")),
+      ]
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean)
+        .join(" ");
+      return normalizeText(haystack).includes(normalizeText(query));
+    }
+    return matchesKeySearch(entry.key, query);
+  });
 }
 
 function renderFavorites() {
@@ -1234,42 +1315,47 @@ function renderFavorites() {
   $("pageInfo").textContent = `Page ${state.page + 1} / ${pageCount} — ${total} favoris`;
 
   const html = pageItems
-    .map(({ key, stat }) => {
-      const hookNo = Number(key.hook_no);
-      const loan = state.loansByKey?.get(key.id);
-      const statusClass = key.is_missing ? "kpill missing" : (loan ? "kpill onloan" : "kpill");
-      const statusLabel = key.is_missing ? "Signalée disparue" : (loan ? "Empruntée" : "Disponible");
-      const ticketLines = buildKeyTicketLines(key, state.q);
-      const keyringLabel = getKeyringLabelForKey(key);
-      const keyringText = keyringLabel
-        ? (state.q ? highlightText(keyringLabel, state.q) : escapeHtml(keyringLabel))
+    .map((entry) => {
+      const isRing = entry.type === "ring";
+      const hookNo = Number(isRing ? entry.keyring?.hook_no : entry.key?.hook_no);
+      const ringKeys = isRing ? entry.keys : [];
+      const ringLoans = isRing
+        ? ringKeys.map((key) => state.loansByKey?.get(key.id)).filter(Boolean)
+        : [];
+      const loan = isRing
+        ? (ringLoans[0] ?? null)
+        : state.loansByKey?.get(entry.key.id);
+      const isMissing = isRing
+        ? ringKeys.some((key) => key?.is_missing)
+        : !!entry.key?.is_missing;
+      const statusClass = isMissing ? "kpill missing" : (loan ? "kpill onloan" : "kpill");
+      const statusLabel = isMissing ? "Signalée disparue" : (loan ? "Empruntée" : "Disponible");
+      const title = isRing
+        ? `Crochet ${Number.isFinite(hookNo) ? hookNo : "?"} - Trousseau ${escapeHtml(String(entry.keyring?.ring_code ?? "A").trim() || "A")}${entry.keyring?.name ? ` (${escapeHtml(entry.keyring.name)})` : ""}`
+        : `Crochet ${Number.isFinite(hookNo) ? hookNo : "?"} - Clé ${escapeHtml(formatKeyTag(entry.key))}`;
+      const ringKeysLine = isRing
+        ? ringKeys.map((key) => escapeHtml(formatKeyTag(key))).join(" - ")
         : "";
       const favoriteMeta = [
-        formatFavoriteBorrowCount(stat.count),
-        stat.lastLoanedAt ? `dernier le ${escapeHtml(formatDateFr(stat.lastLoanedAt))}` : "",
-      ].filter(Boolean).join(" • ");
-      const loanLine = loan
-        ? `Empruntée par ${escapeHtml(loanBorrowerLabel(loan))} le ${escapeHtml(formatDateFr(loan.loaned_at))}`
-        : "";
+        formatFavoriteBorrowCount(entry.count),
+        entry.lastLoanedAt ? `dernier le ${escapeHtml(formatDateFr(entry.lastLoanedAt))}` : "",
+      ].filter(Boolean).join(" - ");
       return `
         <div class="item clickable" data-hook-no="${Number.isFinite(hookNo) ? hookNo : 0}">
           <div class="item-header">
             <div>
-              <div class="title">Crochet #${Number.isFinite(hookNo) ? hookNo : "?"} - Clé ${escapeHtml(formatKeyTag(key))}</div>
+              <div class="title">${title}</div>
+              ${ringKeysLine ? `<div class="kdetail" style="padding-left:0; margin-top:8px;">${ringKeysLine}</div>` : ""}
               <div class="sub">${favoriteMeta}</div>
             </div>
             <span class="${statusClass}">${statusLabel}</span>
           </div>
-          ${ticketLines.line1 ? `<div class="kdetail" style="padding-left:0; margin-top:10px;">${ticketLines.line1}</div>` : ""}
-          ${ticketLines.line2 ? `<div class="kdetail" style="padding-left:0; margin-top:4px;">${ticketLines.line2}</div>` : ""}
-          ${keyringText ? `<div class="kdetail" style="padding-left:0; margin-top:4px;">${keyringText}</div>` : ""}
-          ${loanLine ? `<div class="kdetail" style="padding-left:0; margin-top:4px;">${loanLine}</div>` : ""}
         </div>
       `;
     })
     .join("");
 
-  const emptyMessage = state.favoriteKeyIds.length
+  const emptyMessage = state.favoriteEntries.length
     ? "Aucun résultat dans vos favoris."
     : "Aucun favori dans cette armoire pour l'instant.";
   $("list").innerHTML = html || `<div class="muted" style="padding:12px;">${emptyMessage}</div>`;
