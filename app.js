@@ -1829,9 +1829,14 @@ function syncQrLoanPromptActions() {
   const cancelBtn = $("qrLoanPromptCancelPartial");
   const keepBtn = $("qrLoanPromptKeep");
   const selectedCount = getSelectedQrLoanPromptItems().length;
+  const loanCount = Array.isArray(state.qrLoanPrompt.loans) ? state.qrLoanPrompt.loans.length : 0;
+  const canPartialReturn = loanCount > 1;
 
-  if (returnAllBtn) returnAllBtn.style.display = state.qrLoanPrompt.partialMode ? "none" : "";
-  if (partialBtn) partialBtn.style.display = state.qrLoanPrompt.partialMode ? "none" : "";
+  if (returnAllBtn) {
+    returnAllBtn.textContent = canPartialReturn ? "Tout retourner" : "Retourner";
+    returnAllBtn.style.display = state.qrLoanPrompt.partialMode ? "none" : "";
+  }
+  if (partialBtn) partialBtn.style.display = state.qrLoanPrompt.partialMode || !canPartialReturn ? "none" : "";
   if (keepBtn) keepBtn.style.display = state.qrLoanPrompt.partialMode ? "none" : "";
   if (returnBtn) {
     returnBtn.style.display = state.qrLoanPrompt.partialMode ? "" : "none";
