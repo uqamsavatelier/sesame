@@ -816,49 +816,75 @@ function setStatus(msg) {
 
 
 const PAGE_SIZE = 50;
+function buildTutorialSlides(section) {
+  const stepVariants = Array.isArray(section.stepVariants)
+    ? section.stepVariants
+    : Array.from({ length: section.slideCount }, () => 0);
+  const slides = [];
+
+  stepVariants.forEach((variantCount, index) => {
+    const stepNo = index + 1;
+    slides.push({
+      title: `${section.label} — étape ${stepNo}`,
+      image: `./Démo/${section.folder}/step${stepNo}.jpg`,
+    });
+    for (let variant = 1; variant <= Number(variantCount || 0); variant += 1) {
+      slides.push({
+        title: `${section.label} — étape ${stepNo}`,
+        image: `./Démo/${section.folder}/step${stepNo}-tx${variant}.jpg`,
+      });
+    }
+  });
+
+  return slides;
+}
+
 const TUTORIAL_SECTIONS = [
   {
     key: "create-account",
     label: "Créer un compte",
     folder: "Creer-compte",
     slideCount: 11,
+    stepVariants: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   },
   {
     key: "borrow-return",
     label: "Effectuer un emprunt ou un retour",
     folder: "Emprunter-retourner",
     slideCount: 7,
+    stepVariants: [0, 0, 0, 0, 0, 0, 0],
   },
   {
     key: "navigation",
     label: "Comment naviguer",
     folder: "Navigation",
     slideCount: 11,
+    stepVariants: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   },
   {
     key: "suggestion",
     label: "Faire une suggestion",
     folder: "Suggestions",
     slideCount: 7,
+    stepVariants: [0, 0, 0, 0, 0, 0, 0],
   },
   {
     key: "missing-key",
     label: "Signaler la disparition d'une clé",
     folder: "Signalez-disparue",
     slideCount: 10,
+    stepVariants: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   },
   {
     key: "search",
     label: "Comment effectuer une recherche",
     folder: "Recherche",
     slideCount: 5,
+    stepVariants: [0, 0, 0, 0, 0],
   },
 ].map((section) => ({
   ...section,
-  slides: Array.from({ length: section.slideCount }, (_, index) => ({
-    title: `${section.label} — étape ${index + 1}`,
-    image: `./Démo/${section.folder}/step${index + 1}.jpg`,
-  })),
+  slides: buildTutorialSlides(section),
 }));
 
 let state = {
