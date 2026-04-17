@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Gestion des cl&eacute;s - Connexion</title>
-  <link rel="stylesheet" href="./style.css?v=20260408b" />
+  <link rel="stylesheet" href="./style.css?v=20260417h" />
 </head>
 <body class="login-page">
 
@@ -58,6 +58,10 @@
 
       <div class="login-actions">
         <button id="btnShowSignup" class="btn secondary login-secondary-btn">Créer un compte</button>
+      </div>
+
+      <div class="login-help-row">
+        <button id="btnSignupHelp" class="login-help-btn" type="button" aria-label="Voir comment créer un compte">?</button>
       </div>
 
       <section id="signupPanel" class="login-signup-panel" hidden>
@@ -114,9 +118,32 @@
     </section>
   </main>
 
+  <div id="loginTutorialOverlay" class="tutorial-overlay" hidden></div>
+  <section id="loginTutorialModal" class="tutorial-modal" hidden aria-hidden="true">
+    <div class="tutorial-shell">
+      <div class="tutorial-topbar">
+        <div>
+          <div class="muted">Guide rapide</div>
+          <div class="title">Créer un compte</div>
+        </div>
+        <button id="loginTutorialClose" class="tutorial-close" type="button" aria-label="Fermer">×</button>
+      </div>
+
+      <div class="tutorial-viewer login-tutorial-viewer">
+        <div class="tutorial-stage">
+          <img id="loginTutorialImage" class="tutorial-slide-image" alt="" hidden />
+        </div>
+
+        <div class="tutorial-actions">
+          <button id="loginTutorialNext" class="btn reactive" type="button" hidden>Suivant</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <div class="app-version"></div>
 
-  <script type="module" src="./login.js?v=20260416h"></script>
+  <script type="module" src="./login.js?v=20260417a"></script>
   <script type="module" src="./version.js?v=20260415a"></script>
 </body>
 </html>

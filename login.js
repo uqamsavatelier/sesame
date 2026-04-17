@@ -14,10 +14,109 @@ const $ = (id) => document.getElementById(id);
 const setMessage = (value) => {
   $("msg").textContent = value;
 };
+const LOGIN_TUTORIAL_BASE_PATHS = ["./Démo", "./ressources/Démo"];
+const LOGIN_TUTORIAL_FOLDER = "Creer-compte";
+const LOGIN_TUTORIAL_STEP_COUNT = 11;
+let loginTutorialSlides = [];
+let loginTutorialIndex = 0;
+
+function setLoginTutorialOpen(open) {
+  $("loginTutorialOverlay").hidden = !open;
+  $("loginTutorialModal").hidden = !open;
+  $("loginTutorialModal").setAttribute("aria-hidden", open ? "false" : "true");
+  document.body.classList.toggle("tutorial-open", open);
+}
+
+function probeImage(url) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(true);
+    img.onerror = () => resolve(false);
+    img.src = encodeURI(url);
+  });
+}
+
+async function resolveLoginTutorialBasePath() {
+  for (const basePath of LOGIN_TUTORIAL_BASE_PATHS) {
+    if (await probeImage(`${basePath}/${LOGIN_TUTORIAL_FOLDER}/step1.jpg`)) return basePath;
+  }
+  return LOGIN_TUTORIAL_BASE_PATHS[0];
+}
+
+async function buildLoginTutorialSlides() {
+  const basePath = await resolveLoginTutorialBasePath();
+  const slides = [];
+  for (let stepNo = 1; stepNo <= LOGIN_TUTORIAL_STEP_COUNT; stepNo += 1) {
+    const baseImage = `${basePath}/${LOGIN_TUTORIAL_FOLDER}/step${stepNo}.jpg`;
+    if (await probeImage(baseImage)) slides.push(baseImage);
+    for (let variant = 1; variant <= 12; variant += 1) {
+      const variantImage = `${basePath}/${LOGIN_TUTORIAL_FOLDER}/step${stepNo}-tx${variant}.jpg`;
+      if (!(await probeImage(variantImage))) break;
+      slides.push(variantImage);
+    }
+  }
+  return slides;
+}
+
+function renderLoginTutorial() {
+  const image = $("loginTutorialImage");
+  const nextBtn = $("loginTutorialNext");
+  if (!image || !nextBtn) return;
+  const current = loginTutorialSlides[loginTutorialIndex];
+  if (!current) {
+    image.hidden = true;
+    image.removeAttribute("src");
+    image.alt = "";
+    nextBtn.hidden = true;
+    return;
+  }
+  image.hidden = false;
+  image.src = encodeURI(current);
+  image.alt = `Créer un compte — image ${loginTutorialIndex + 1}`;
+  nextBtn.hidden = false;
+  nextBtn.textContent = loginTutorialIndex >= loginTutorialSlides.length - 1 ? "Fermer" : "Suivant";
+}
+
+async function openLoginTutorial() {
+  setMessage("");
+  loginTutorialSlides = [];
+  loginTutorialIndex = 0;
+  setLoginTutorialOpen(true);
+  renderLoginTutorial();
+  loginTutorialSlides = await buildLoginTutorialSlides();
+  loginTutorialIndex = 0;
+  renderLoginTutorial();
+}
+
+function closeLoginTutorial() {
+  loginTutorialSlides = [];
+  loginTutorialIndex = 0;
+  setLoginTutorialOpen(false);
+  const image = $("loginTutorialImage");
+  if (image) {
+    image.removeAttribute("src");
+    image.alt = "";
+    image.hidden = true;
+  }
+}
+
+function nextLoginTutorialSlide() {
+  if (!loginTutorialSlides.length) {
+    closeLoginTutorial();
+    return;
+  }
+  if (loginTutorialIndex >= loginTutorialSlides.length - 1) {
+    closeLoginTutorial();
+    return;
+  }
+  loginTutorialIndex += 1;
+  renderLoginTutorial();
+}
 
 function setSignupPanelOpen(open) {
   $("signupPanel").hidden = !open;
   $("btnShowSignup").hidden = !!open;
+  $("btnSignupHelp").hidden = !!open;
   if (open) $("signupDisplayName")?.focus();
 }
 
@@ -106,6 +205,9 @@ $("btnShowSignup").addEventListener("click", () => {
   setMessage("");
   setSignupPanelOpen(true);
 });
+$("btnSignupHelp").addEventListener("click", () => {
+  void openLoginTutorial();
+});
 $("btnSignup").addEventListener("click", doSignup);
 $("btnCancelSignup").addEventListener("click", () => {
   $("signupDisplayName").value = "";
@@ -147,3 +249,20 @@ function bindPasswordToggle(buttonId, inputId) {
 
 bindPasswordToggle("togglePassword", "password");
 bindPasswordToggle("toggleSignupPassword", "signupPassword");
+
+$("loginTutorialClose").addEventListener("click", closeLoginTutorial);
+$("loginTutorialOverlay").addEventListener("click", closeLoginTutorial);
+$("loginTutorialNext").addEventListener("click", nextLoginTutorialSlide);
+
+document.addEventListener("keydown", (event) => {
+  if ($("loginTutorialModal").hidden) return;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeLoginTutorial();
+    return;
+  }
+  if (event.key === "ArrowRight") {
+    event.preventDefault();
+    nextLoginTutorialSlide();
+  }
+});

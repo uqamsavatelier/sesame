@@ -1670,6 +1670,32 @@ body.login-page .login-actions{
   justify-content: center;
   margin-top: 14px;
 }
+body.login-page .login-help-row{
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+}
+body.login-page .login-help-btn{
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid rgba(148,163,184,.45);
+  background: rgba(255,255,255,.88);
+  color: #475569;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+body.login-page .login-help-btn:hover{
+  border-color: rgba(71,85,105,.55);
+  background: rgba(255,255,255,.98);
+  color: #0f172a;
+}
+body.login-page .login-help-btn:focus-visible{
+  outline: 2px solid rgba(59,130,246,.72);
+  outline-offset: 2px;
+}
 body.login-page .login-btn,
 body.login-page .login-secondary-btn{
   width: min(330px, 100%);
@@ -1734,6 +1760,24 @@ body.login-page .app-version{
 }
 body.login-page .field-shell .input.login-input{
   background: transparent;
+}
+body.login-page .tutorial-modal{
+  color: #111827;
+  background: rgba(255,255,255,.98);
+}
+body.login-page .tutorial-overlay{
+  background: rgba(15,23,42,.12);
+}
+body.login-page .tutorial-close{
+  background: rgba(15,23,42,.04);
+  color: #111827;
+}
+body.login-page .login-tutorial-viewer{
+  flex: 1;
+  min-height: 0;
+}
+body.login-page.tutorial-open{
+  overflow: hidden;
 }
 body.waiting-page .waiting-card{
   width: min(560px, 100%);
