@@ -882,6 +882,8 @@ let state = {
     loans: [],
     autoOpenPending: false,
     openDelayHandle: null,
+    partialMode: false,
+    selectedItemIds: new Set(),
   },
   addKeysModalOpen: false,
   adminLoanUsers: [],
@@ -1510,6 +1512,7 @@ function buildQrLoanPromptItems() {
 
     const hookNo = Number(entry.key?.hook_no);
     items.push({
+      id: `key:${entry.key?.id ?? "?"}`,
       type: "key",
       hookNo: Number.isFinite(hookNo) ? hookNo : 0,
       label: `Crochet ${Number.isFinite(hookNo) ? hookNo : "?"} - Clé ${formatKeyTag(entry.key)}`,
@@ -1525,6 +1528,7 @@ function buildQrLoanPromptItems() {
     const totalKeys = state.keys.filter((key) => Number(key.keyring_id) === Number(keyringId)).length || groupedEntries.length;
     const keyCountLabel = `${totalKeys} ${totalKeys > 1 ? "clés" : "clé"}`;
     items.push({
+      id: `ring:${keyringId}`,
       type: "keyring",
       hookNo: Number.isFinite(hookNo) ? hookNo : 0,
       label: `Crochet ${Number.isFinite(hookNo) ? hookNo : "?"} - Trousseau ${ringCode}${ringName ? `, ${ringName}` : ""} (${keyCountLabel})`,
@@ -1537,6 +1541,44 @@ function buildQrLoanPromptItems() {
     if (hookDiff !== 0) return hookDiff;
     return String(a.label).localeCompare(String(b.label), "fr-CA", { sensitivity: "base", numeric: true });
   });
+}
+
+function getSelectedQrLoanPromptItems() {
+  if (!state.qrLoanPrompt.partialMode) return state.qrLoanPrompt.loans;
+  return state.qrLoanPrompt.loans.filter((item) => state.qrLoanPrompt.selectedItemIds.has(item.id));
+}
+
+function getUniqueQrLoanPromptEntries(items = state.qrLoanPrompt.loans) {
+  const entries = (Array.isArray(items) ? items : [])
+    .flatMap((item) => Array.isArray(item.entries) ? item.entries : [])
+    .filter((entry) => Number.isFinite(Number(entry?.key?.id)));
+  const uniqueEntries = [];
+  const seenKeyIds = new Set();
+  for (const entry of entries) {
+    const keyId = Number(entry.key?.id);
+    if (!Number.isFinite(keyId) || seenKeyIds.has(keyId)) continue;
+    seenKeyIds.add(keyId);
+    uniqueEntries.push(entry);
+  }
+  return uniqueEntries;
+}
+
+function syncQrLoanPromptActions() {
+  const returnAllBtn = $("qrLoanPromptReturnAll");
+  const partialBtn = $("qrLoanPromptPartial");
+  const returnBtn = $("qrLoanPromptReturn");
+  const cancelBtn = $("qrLoanPromptCancelPartial");
+  const keepBtn = $("qrLoanPromptKeep");
+  const selectedCount = getSelectedQrLoanPromptItems().length;
+
+  if (returnAllBtn) returnAllBtn.style.display = state.qrLoanPrompt.partialMode ? "none" : "";
+  if (partialBtn) partialBtn.style.display = state.qrLoanPrompt.partialMode ? "none" : "";
+  if (keepBtn) keepBtn.style.display = state.qrLoanPrompt.partialMode ? "none" : "";
+  if (returnBtn) {
+    returnBtn.style.display = state.qrLoanPrompt.partialMode ? "" : "none";
+    returnBtn.disabled = state.qrLoanPrompt.partialMode && selectedCount === 0;
+  }
+  if (cancelBtn) cancelBtn.style.display = state.qrLoanPrompt.partialMode ? "" : "none";
 }
 
 function renderQrLoanPrompt() {
@@ -1553,11 +1595,18 @@ function renderQrLoanPrompt() {
   listEl.innerHTML = state.qrLoanPrompt.loans.map((item) => {
     const firstLoan = item.entries?.[0]?.loan ?? null;
     const when = firstLoan?.loaned_at ? formatDateFr(firstLoan.loaned_at) : "—";
+    const checked = state.qrLoanPrompt.selectedItemIds.has(item.id) ? "checked" : "";
     return `<div class="item" style="padding:10px 12px;">
-      <div class="title">${escapeHtml(item.label)}</div>
-      <div class="muted">Emprunté le ${escapeHtml(when)}</div>
+      <label style="display:flex; gap:10px; align-items:flex-start; cursor:${state.qrLoanPrompt.partialMode ? "pointer" : "default"};">
+        ${state.qrLoanPrompt.partialMode ? `<input type="checkbox" class="qr-loan-check" data-item-id="${escapeHtml(item.id)}" ${checked} style="margin-top:3px;" />` : ""}
+        <div style="min-width:0;">
+          <div class="title">${escapeHtml(item.label)}</div>
+          <div class="muted">Emprunté le ${escapeHtml(when)}</div>
+        </div>
+      </label>
     </div>`;
   }).join("");
+  syncQrLoanPromptActions();
 }
 
 function openQrLoanPrompt(loans, signature) {
@@ -1569,6 +1618,8 @@ function openQrLoanPrompt(loans, signature) {
   state.qrLoanPrompt.open = true;
   state.qrLoanPrompt.loans = Array.isArray(loans) ? loans : [];
   state.qrLoanPrompt.lastShownSignature = signature || "";
+  state.qrLoanPrompt.partialMode = false;
+  state.qrLoanPrompt.selectedItemIds = new Set();
   renderQrLoanPrompt();
   setQrLoanPromptOpen(true);
   openTrackedModal("qrLoanPrompt", wasOpen);
@@ -1582,8 +1633,23 @@ function closeQrLoanPrompt(options = {}) {
     }
     state.qrLoanPrompt.open = false;
     state.qrLoanPrompt.loans = [];
+    state.qrLoanPrompt.partialMode = false;
+    state.qrLoanPrompt.selectedItemIds = new Set();
     setQrLoanPromptOpen(false);
   }, options);
+}
+
+async function returnQrLoanPromptItems(items) {
+  const entries = getUniqueQrLoanPromptEntries(items);
+  for (const entry of entries) {
+    const loanId = Number(entry.loan?.id);
+    const keyId = Number(entry.key?.id);
+    if (Number.isFinite(loanId) && loanId > 0) {
+      await fnLoanReturnAny({ loan_id: loanId, key_id: keyId });
+    } else {
+      await fnLoanReturnAny({ key_id: keyId });
+    }
+  }
 }
 
 function maybeOpenQrLoanPrompt() {
@@ -1818,10 +1884,6 @@ function renderHookModal(hookNo) {
   const canSelfBorrowCurrentCabinet = canSelfBorrowCabinet();
   const canAdminActions = canAdminCurrentCabinet && (canCreate || canMove || canEdit || canDelete);
   $("hookModalActions").style.display = (canAdminActions || canSuggest) ? "flex" : "none";
-  const btnBorrowAll = $("hookBorrowAll");
-  if (btnBorrowAll) btnBorrowAll.style.display = canSelfBorrowCurrentCabinet ? "" : "none";
-  const btnReturnAll = $("hookReturnAll");
-  if (btnReturnAll) btnReturnAll.style.display = canReturn ? "" : "none";
   const btnAddKey = $("hookAddKey");
   if (btnAddKey) btnAddKey.style.display = canAdminCurrentCabinet && canCreate ? "" : "none";
   const btnSuggest = $("hookProposals");
@@ -3481,65 +3543,6 @@ $("m_is_keyring").addEventListener("change", (e) => {
     }
   });
 
-  $("hookBorrowAll").addEventListener("click", async () => {
-    if (!canSelfBorrowCabinet()) return;
-    if (state.hookModal.hookNo == null) return;
-    const { keyringsForHook, singles } = getHookDetail(state.hookModal.hookNo);
-    try {
-      for (const kr of keyringsForHook) {
-        const cabId = kr.cabinet_id ?? state.cabinetId;
-        const hookNo = kr.hook_no ?? state.hookModal.hookNo;
-        const ringCode = kr.ring_code;
-        if (!Number.isFinite(Number(cabId)) || !Number.isFinite(Number(hookNo)) || !ringCode) {
-          throw new Error(`Trousseau invalide (cabinet_id=${cabId}, hook_no=${hookNo}, ring_code=${ringCode})`);
-        }
-        await fnLoanCreateKeyring(
-          String(cabId),
-          Number(hookNo),
-          String(ringCode).toUpperCase(),
-          kr.note ?? null,
-        );
-      }
-      for (const k of singles) {
-        if (k.is_missing) continue;
-        if (state.loansByKey?.has(k.id)) continue;
-        await fnLoanCreate(k.id);
-      }
-      await refreshAfterAction();
-    } catch (err) {
-      const msg = err?.payload?.error || err?.message || String(err);
-      alert(msg);
-    }
-  });
-
-  $("hookReturnAll").addEventListener("click", async () => {
-    if (state.hookModal.hookNo == null) return;
-    const { keyringsForHook, singles } = getHookDetail(state.hookModal.hookNo);
-    try {
-      for (const kr of keyringsForHook) {
-        const cabId = kr.cabinet_id ?? state.cabinetId;
-        const hookNo = kr.hook_no ?? state.hookModal.hookNo;
-        const ringCode = kr.ring_code;
-        if (!Number.isFinite(Number(cabId)) || !Number.isFinite(Number(hookNo)) || !ringCode) {
-          throw new Error(`Trousseau invalide (cabinet_id=${cabId}, hook_no=${hookNo}, ring_code=${ringCode})`);
-        }
-        await fnLoanReturnKeyring(
-          String(cabId),
-          Number(hookNo),
-          String(ringCode).toUpperCase(),
-        );
-      }
-      for (const k of singles) {
-        const loan = state.loansByKey?.get(k.id);
-        if (loan?.id) await fnLoanReturn(loan.id);
-        else await fnLoanReturnByKeyLocal(k.id);
-      }
-      await refreshAfterAction();
-    } catch (err) {
-      const msg = err?.payload?.error || err?.message || String(err);
-      alert(msg);
-    }
-  });
 
   // --- Modal éditer clé ---
   $("editClose").addEventListener("click", closeEditModal);
@@ -4210,51 +4213,82 @@ $("m_is_keyring").addEventListener("change", (e) => {
 
   $("qrLoanPromptClose").addEventListener("click", closeQrLoanPrompt);
   $("qrLoanPromptKeep").addEventListener("click", closeQrLoanPrompt);
+  $("qrLoanPromptPartial").addEventListener("click", () => {
+    state.qrLoanPrompt.partialMode = true;
+    state.qrLoanPrompt.selectedItemIds = new Set();
+    renderQrLoanPrompt();
+  });
+  $("qrLoanPromptCancelPartial").addEventListener("click", () => {
+    state.qrLoanPrompt.partialMode = false;
+    state.qrLoanPrompt.selectedItemIds = new Set();
+    renderQrLoanPrompt();
+  });
   $("qrLoanPromptOverlay").addEventListener("click", closeQrLoanPrompt);
-  $("qrLoanPromptReturn").addEventListener("click", async () => {
+  $("qrLoanPromptList").addEventListener("change", (e) => {
+    const checkbox = e.target.closest("input.qr-loan-check[data-item-id]");
+    if (!checkbox) return;
+    const itemId = String(checkbox.dataset.itemId || "");
+    if (!itemId) return;
+    if (checkbox.checked) state.qrLoanPrompt.selectedItemIds.add(itemId);
+    else state.qrLoanPrompt.selectedItemIds.delete(itemId);
+    syncQrLoanPromptActions();
+  });
+  $("qrLoanPromptReturnAll").addEventListener("click", async () => {
     const statusEl = $("qrLoanPromptStatus");
-    const returnBtn = $("qrLoanPromptReturn");
+    const returnAllBtn = $("qrLoanPromptReturnAll");
+    const partialBtn = $("qrLoanPromptPartial");
     const keepBtn = $("qrLoanPromptKeep");
     const closeBtn = $("qrLoanPromptClose");
-    const entries = state.qrLoanPrompt.loans
-      .flatMap((item) => Array.isArray(item.entries) ? item.entries : [])
-      .filter((entry) => Number.isFinite(Number(entry?.key?.id)));
-    if (!entries.length) {
+    const items = state.qrLoanPrompt.loans;
+    if (!items.length) {
       closeQrLoanPrompt();
       return;
     }
 
     try {
       if (statusEl) statusEl.textContent = "Traitement...";
-      returnBtn.disabled = true;
+      returnAllBtn.disabled = true;
+      partialBtn.disabled = true;
       keepBtn.disabled = true;
       closeBtn.disabled = true;
+      await returnQrLoanPromptItems(items);
+      closeQrLoanPrompt();
+      await refreshAfterAction();
+    } catch (e) {
+      if (statusEl) statusEl.textContent = `Erreur: ${e?.message ?? e}`;
+    } finally {
+      returnAllBtn.disabled = false;
+      partialBtn.disabled = false;
+      keepBtn.disabled = false;
+      closeBtn.disabled = false;
+    }
+  });
+  $("qrLoanPromptReturn").addEventListener("click", async () => {
+    const statusEl = $("qrLoanPromptStatus");
+    const returnBtn = $("qrLoanPromptReturn");
+    const cancelBtn = $("qrLoanPromptCancelPartial");
+    const keepBtn = $("qrLoanPromptKeep");
+    const closeBtn = $("qrLoanPromptClose");
+    const items = getSelectedQrLoanPromptItems();
+    if (!items.length) {
+      if (statusEl) statusEl.textContent = "Choisis au moins un emprunt à retourner.";
+      return;
+    }
 
-      const uniqueEntries = [];
-      const seenKeyIds = new Set();
-      for (const entry of entries) {
-        const keyId = Number(entry.key?.id);
-        if (!Number.isFinite(keyId) || seenKeyIds.has(keyId)) continue;
-        seenKeyIds.add(keyId);
-        uniqueEntries.push(entry);
-      }
-
-      for (const entry of uniqueEntries) {
-        const loanId = Number(entry.loan?.id);
-        const keyId = Number(entry.key?.id);
-        if (Number.isFinite(loanId) && loanId > 0) {
-          await fnLoanReturnAny({ loan_id: loanId, key_id: keyId });
-        } else {
-          await fnLoanReturnAny({ key_id: keyId });
-        }
-      }
-
+    try {
+      if (statusEl) statusEl.textContent = "Traitement...";
+      returnBtn.disabled = true;
+      cancelBtn.disabled = true;
+      keepBtn.disabled = true;
+      closeBtn.disabled = true;
+      await returnQrLoanPromptItems(items);
       closeQrLoanPrompt();
       await refreshAfterAction();
     } catch (e) {
       if (statusEl) statusEl.textContent = `Erreur: ${e?.message ?? e}`;
     } finally {
       returnBtn.disabled = false;
+      cancelBtn.disabled = false;
       keepBtn.disabled = false;
       closeBtn.disabled = false;
     }
