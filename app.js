@@ -1757,7 +1757,11 @@ function renderCabinetGrid() {
       ? (c.is_active === false
         ? `<button class="btn secondary reactive cabinet-reactivate-btn" data-cabinet-id="${c.id}" type="button">Remettre en fonction</button>`
         : `<div class="cabinet-actions">
-            <button class="btn secondary icon-btn cabinet-qr-btn" data-cabinet-id="${c.id}" type="button" aria-label="Code QR de l'armoire" title="Code QR">▦</button>
+            <button class="btn secondary icon-btn cabinet-qr-btn" data-cabinet-id="${c.id}" type="button" aria-label="Code QR de l'armoire" title="Code QR">
+              <span class="qr-button-icon" aria-hidden="true">
+                <span></span><span></span><span></span><span></span>
+              </span>
+            </button>
             <button class="btn secondary icon-btn btn-edit cabinet-edit-btn" data-cabinet-id="${c.id}" type="button" aria-label="Éditer l'armoire" title="Éditer">✎</button>
           </div>`)
       : "";
