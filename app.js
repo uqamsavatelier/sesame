@@ -1759,7 +1759,13 @@ function renderCabinetGrid() {
         : `<div class="cabinet-actions">
             <button class="btn secondary icon-btn cabinet-qr-btn" data-cabinet-id="${c.id}" type="button" aria-label="Code QR de l'armoire" title="Code QR">
               <span class="qr-button-icon" aria-hidden="true">
-                <span></span><span></span><span></span><span></span>
+                <span class="qr-finder qr-finder-tl"></span>
+                <span class="qr-finder qr-finder-tr"></span>
+                <span class="qr-finder qr-finder-bl"></span>
+                <span class="qr-module qr-module-a"></span>
+                <span class="qr-module qr-module-b"></span>
+                <span class="qr-module qr-module-c"></span>
+                <span class="qr-module qr-module-d"></span>
               </span>
             </button>
             <button class="btn secondary icon-btn btn-edit cabinet-edit-btn" data-cabinet-id="${c.id}" type="button" aria-label="Éditer l'armoire" title="Éditer">✎</button>
