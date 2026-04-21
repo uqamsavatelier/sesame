@@ -1764,8 +1764,6 @@ function renderCabinetGrid() {
                 <span class="qr-finder qr-finder-bl"></span>
                 <span class="qr-module qr-module-a"></span>
                 <span class="qr-module qr-module-b"></span>
-                <span class="qr-module qr-module-c"></span>
-                <span class="qr-module qr-module-d"></span>
               </span>
             </button>
             <button class="btn secondary icon-btn btn-edit cabinet-edit-btn" data-cabinet-id="${c.id}" type="button" aria-label="Éditer l'armoire" title="Éditer">✎</button>

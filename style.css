@@ -830,26 +830,17 @@ body[data-theme="light"] .tutorial-close{
   justify-content:center;
 }
 .qr-button-icon{
-  width: 19px;
-  height: 19px;
+  width: 18px;
+  height: 18px;
   position: relative;
   display:block;
 }
 .qr-finder{
   position:absolute;
-  width: 7px;
-  height: 7px;
-  border: 2px solid currentColor;
-}
-.qr-finder::after{
-  content:"";
-  position:absolute;
-  left:50%;
-  top:50%;
-  width: 3px;
-  height: 3px;
+  width: 6px;
+  height: 6px;
   background: currentColor;
-  transform: translate(-50%, -50%);
+  border-radius: 1px;
 }
 .qr-finder-tl{ left:0; top:0; }
 .qr-finder-tr{ right:0; top:0; }
@@ -859,20 +850,10 @@ body[data-theme="light"] .tutorial-close{
   width: 4px;
   height: 4px;
   background: currentColor;
+  border-radius: 1px;
 }
-.qr-module-a{ left: 11px; top: 10px; }
-.qr-module-b{ right: 0; top: 10px; }
-.qr-module-c{ left: 10px; bottom: 0; }
-.qr-module-d{ right: 4px; bottom: 4px; }
-.qr-module-d::after{
-  content:"";
-  position:absolute;
-  right: -4px;
-  bottom: -4px;
-  width: 4px;
-  height: 4px;
-  background: currentColor;
-}
+.qr-module-a{ right: 5px; bottom: 5px; }
+.qr-module-b{ right: 0; bottom: 0; }
 .cabinet-qr-layout{
   display:grid;
   grid-template-columns: 220px 1fr;
