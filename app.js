@@ -20,6 +20,7 @@ import {
   fnImportKeysCsv,
   createKeySuggestion,
   createCabinet,
+  generateCabinetQr,
   updateCabinet,
   getCabinetUsage,
   deleteCabinet,
@@ -29,7 +30,7 @@ import {
   listLoansByBorrower,
   rpcAdminCreateLoan,
   rpcAdminCreateKeyringLoan,
-} from "./api.js";
+} from "./api.js?v=20260421a";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks, logAuditEvent } from "./audit.js";
 
 
@@ -388,6 +389,15 @@ function buildQrCabinetHref(cabinetId) {
   return Number.isFinite(cabinetId)
     ? `./index.html?mode=qr&cabinet=${cabinetId}`
     : "./index.html";
+}
+
+function buildQrCabinetUrl(cabinetId) {
+  const url = new URL("https://uqamsavatelier.github.io/sesame/index.html");
+  if (Number.isFinite(cabinetId)) {
+    url.searchParams.set("mode", "qr");
+    url.searchParams.set("cabinet", String(cabinetId));
+  }
+  return url.toString();
 }
 
 function buildQrLoansHref(cabinetId) {
@@ -1000,6 +1010,11 @@ let state = {
     open: false,
     cabinetId: null,
   },
+  cabinetQrModal: {
+    open: false,
+    cabinetId: null,
+    payload: null,
+  },
   tutorialModal: {
     open: false,
     sectionKey: null,
@@ -1210,6 +1225,7 @@ registerModalCloseHandler("tutorial", closeTutorialModal);
 registerModalCloseHandler("qrLoanPrompt", closeQrLoanPrompt);
 registerModalCloseHandler("cabinetEdit", closeCabinetEditModal);
 registerModalCloseHandler("cabinetCreate", closeCabinetCreateModal);
+registerModalCloseHandler("cabinetQr", closeCabinetQrModal);
 registerModalCloseHandler("hook", closeHookModal);
 registerModalCloseHandler("edit", closeEditModal);
 registerModalCloseHandler("keyringEdit", closeKeyringEditModal);
@@ -1737,17 +1753,21 @@ function renderCabinetGrid() {
     if (c.allow_consultation !== false) metaParts.push("Consultation");
     if (c.allow_self_borrow !== false) metaParts.push("Emprunts");
     if (c.allow_admin_lending === true) metaParts.push("Prêts admin");
+    const adminActions = canEditCabinet
+      ? (c.is_active === false
+        ? `<button class="btn secondary reactive cabinet-reactivate-btn" data-cabinet-id="${c.id}" type="button">Remettre en fonction</button>`
+        : `<div class="cabinet-actions">
+            <button class="btn secondary icon-btn cabinet-qr-btn" data-cabinet-id="${c.id}" type="button" aria-label="Code QR de l'armoire" title="Code QR">▦</button>
+            <button class="btn secondary icon-btn btn-edit cabinet-edit-btn" data-cabinet-id="${c.id}" type="button" aria-label="Éditer l'armoire" title="Éditer">✎</button>
+          </div>`)
+      : "";
     return `
       <div class="cabinet-card ${c.is_active === false ? "inactive" : ""}" data-cabinet-id="${c.id}">
         <div class="cabinet-card-head">
-          <div class="cabinet-name">${c.name}</div>
-          ${canEditCabinet
-      ? (c.is_active === false
-        ? `<button class="btn secondary reactive cabinet-reactivate-btn" data-cabinet-id="${c.id}" type="button">Remettre en fonction</button>`
-        : `<button class="btn secondary icon-btn btn-edit cabinet-edit-btn" data-cabinet-id="${c.id}" type="button" aria-label="Éditer l'armoire">✎</button>`)
-      : ""}
+          <div class="cabinet-name">${escapeHtml(c.name)}</div>
+          ${adminActions}
         </div>
-        <div class="cabinet-meta">${metaParts.join(" • ")}</div>
+        <div class="cabinet-meta">${metaParts.map((part) => escapeHtml(part)).join(" • ")}</div>
       </div>
     `;
   }).join("");
@@ -1768,6 +1788,16 @@ function renderCabinetGrid() {
         await updateCabinet(id, { is_active: true });
         await loadCabinets();
         renderCabinetGrid();
+        return;
+      }
+      const qrBtn = e.target.closest("button.cabinet-qr-btn[data-cabinet-id]");
+      if (qrBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const qrId = Number(qrBtn.dataset.cabinetId);
+        const cabinet = state.cabinets.find((row) => Number(row.id) === qrId);
+        if (!canAdministrateCabinet(cabinet)) return;
+        if (Number.isFinite(qrId)) await openCabinetQrModal(qrId);
         return;
       }
       const editBtn = e.target.closest("button.cabinet-edit-btn[data-cabinet-id]");
@@ -1879,6 +1909,96 @@ function closeCabinetCreateModal(options = {}) {
     $("cabinetCreateModal").setAttribute("aria-hidden", "true");
     $("cabCreateStatus").textContent = "";
   }, options);
+}
+
+function renderCabinetQrModal() {
+  const cabinetId = Number(state.cabinetQrModal.cabinetId);
+  const cabinet = state.cabinets.find((row) => Number(row.id) === cabinetId);
+  const payload = state.cabinetQrModal.payload || {};
+  const link = String(payload.link || buildQrCabinetUrl(cabinetId));
+  const imageUrl = String(payload.public_url || "");
+  const filename = String(payload.path || `cabinet${String(cabinetId).padStart(2, "0")}_qr.png`);
+
+  $("cabinetQrTitle").textContent = cabinet?.name ? `Code QR - ${cabinet.name}` : "Code QR";
+  $("cabinetQrLink").value = link;
+  $("cabinetQrDownload").disabled = !imageUrl;
+  $("cabinetQrDownload").dataset.url = imageUrl;
+  $("cabinetQrDownload").dataset.filename = filename;
+
+  const image = $("cabinetQrImage");
+  if (imageUrl) {
+    image.hidden = false;
+    image.src = `${imageUrl}${imageUrl.includes("?") ? "&" : "?"}v=${Date.now()}`;
+    image.alt = `Code QR pour ${cabinet?.name || "l'armoire"}`;
+    $("cabinetQrStatus").textContent = "";
+  } else {
+    image.hidden = true;
+    image.removeAttribute("src");
+  }
+}
+
+async function openCabinetQrModal(cabinetId) {
+  const cabinet = state.cabinets.find((row) => Number(row.id) === Number(cabinetId));
+  if (!cabinet || !canAdministrateCabinet(cabinet)) return;
+
+  const wasOpen = state.cabinetQrModal.open;
+  state.cabinetQrModal.open = true;
+  state.cabinetQrModal.cabinetId = Number(cabinet.id);
+  state.cabinetQrModal.payload = null;
+  renderCabinetQrModal();
+  $("cabinetQrStatus").textContent = "Génération du code QR...";
+  setCabinetQrModalOpen(true);
+  openTrackedModal("cabinetQr", wasOpen);
+
+  try {
+    const payload = await generateCabinetQr(cabinet.id);
+    state.cabinetQrModal.payload = payload || null;
+    renderCabinetQrModal();
+  } catch (e) {
+    $("cabinetQrStatus").textContent = `Erreur: ${e?.message ?? e}`;
+  }
+}
+
+function closeCabinetQrModal(options = {}) {
+  closeTrackedModal("cabinetQr", () => {
+    state.cabinetQrModal.open = false;
+    state.cabinetQrModal.cabinetId = null;
+    state.cabinetQrModal.payload = null;
+    $("cabinetQrStatus").textContent = "";
+    $("cabinetQrLink").value = "";
+    $("cabinetQrDownload").disabled = true;
+    $("cabinetQrImage").hidden = true;
+    $("cabinetQrImage").removeAttribute("src");
+    setCabinetQrModalOpen(false);
+  }, options);
+}
+
+async function downloadCabinetQr() {
+  const button = $("cabinetQrDownload");
+  const url = String(button?.dataset?.url || "");
+  const filename = String(button?.dataset?.filename || "cabinet_qr.png");
+  if (!url) return;
+
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(objectUrl);
+  } catch {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.target = "_blank";
+    a.rel = "noopener";
+    a.click();
+  }
 }
 
 
@@ -2674,6 +2794,15 @@ function setQrLoanPromptOpen(open) {
   modal.setAttribute("aria-hidden", open ? "false" : "true");
 }
 
+function setCabinetQrModalOpen(open) {
+  const overlay = $("cabinetQrOverlay");
+  const modal = $("cabinetQrModal");
+  if (!overlay || !modal) return;
+  overlay.hidden = !open;
+  modal.hidden = !open;
+  modal.setAttribute("aria-hidden", open ? "false" : "true");
+}
+
 function getCurrentKeyringIdForKey(keyId) {
   const key = state.keys.find(k => k.id === keyId);
   if (!key) return null;
@@ -3324,6 +3453,9 @@ renderHookExistingDetails(Number($("m_hook").value));
   $("cabCreateClose").addEventListener("click", closeCabinetCreateModal);
   $("cabCreateCancel").addEventListener("click", closeCabinetCreateModal);
   $("cabinetCreateOverlay").addEventListener("click", closeCabinetCreateModal);
+  $("cabinetQrClose").addEventListener("click", closeCabinetQrModal);
+  $("cabinetQrOverlay").addEventListener("click", closeCabinetQrModal);
+  $("cabinetQrDownload").addEventListener("click", downloadCabinetQr);
   $("cabCreateSave").addEventListener("click", async () => {
     const name = $("cab_create_name").value.trim();
     const location = $("cab_create_location").value.trim();

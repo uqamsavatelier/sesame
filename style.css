@@ -807,13 +807,64 @@ body[data-theme="light"] .tutorial-close{
 }
 .cabinet-name{ font-weight:800; }
 .cabinet-meta{ margin-top:6px; color: var(--muted); font-size: 13px; }
+.cabinet-actions{
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 .cabinet-edit-btn{
   margin-left: auto;
+}
+.cabinet-actions .cabinet-edit-btn{
+  margin-left: 0;
 }
 .cabinet-reactivate-btn{
   margin-left: auto;
   padding: 6px 10px;
   font-size: 12px;
+}
+.cabinet-qr-btn{
+  font-size: 18px;
+  line-height: 1;
+}
+.cabinet-qr-layout{
+  display:grid;
+  grid-template-columns: 220px 1fr;
+  gap:16px;
+  align-items:center;
+  margin-top: 12px;
+}
+.cabinet-qr-preview{
+  min-height: 220px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+}
+.cabinet-qr-preview img{
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display:block;
+}
+.cabinet-qr-link-field{
+  min-width: 0;
+}
+
+@media (max-width: 640px){
+  .cabinet-qr-layout{
+    grid-template-columns: 1fr;
+  }
+  .cabinet-qr-preview{
+    width: min(100%, 260px);
+    aspect-ratio: 1;
+    min-height: 0;
+    margin: 0 auto;
+  }
 }
 
 /* ====== Pagination en bas ====== */

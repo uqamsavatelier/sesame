@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Gestion clés — Accueil</title>
-  <link rel="stylesheet" href="./style.css?v=20260417g" />
+  <link rel="stylesheet" href="./style.css?v=20260421a" />
 </head>
 <body class="loading">
 
@@ -262,6 +262,34 @@
     <button id="cabCreateSave" class="btn reactive">Créer</button>
     <button id="cabCreateCancel" class="btn secondary reactive">Annuler</button>
     <div id="cabCreateStatus" class="muted"></div>
+  </div>
+</section>
+
+<!-- ===================== MODAL : Code QR armoire ===================== -->
+<div id="cabinetQrOverlay" class="edit-overlay" hidden></div>
+
+<section id="cabinetQrModal" class="edit-modal cabinet-qr-modal" hidden aria-hidden="true">
+  <div class="hook-modal-head">
+    <div>
+      <div class="title" id="cabinetQrTitle">Code QR</div>
+      <div class="muted">Lien de consultation de l'armoire</div>
+    </div>
+    <button id="cabinetQrClose" class="btn secondary reactive">Fermer</button>
+  </div>
+
+  <div class="cabinet-qr-layout">
+    <div class="cabinet-qr-preview">
+      <img id="cabinetQrImage" alt="" hidden />
+    </div>
+    <label class="field cabinet-qr-link-field">
+      <div class="muted">Lien encodé</div>
+      <input id="cabinetQrLink" class="input" readonly />
+    </label>
+  </div>
+
+  <div class="row" style="margin-top:12px;">
+    <button id="cabinetQrDownload" class="btn reactive" type="button" disabled>Télécharger</button>
+    <div id="cabinetQrStatus" class="muted"></div>
   </div>
 </section>
 
@@ -757,8 +785,8 @@
   <div class="app-version"></div>
 
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script type="module" src="./app.js?v=20260417m"></script>
-<script type="module" src="./version.js?v=20260415a"></script>
+  <script type="module" src="./app.js?v=20260421a"></script>
+<script type="module" src="./version.js?v=20260421a"></script>
 </body>
 </html>
 

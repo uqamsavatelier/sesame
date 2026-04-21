@@ -226,6 +226,7 @@ export async function createCabinet(payload) {
   const { data, error } = result;
 
   if (!error) {
+    const qr = await generateCabinetQr(data?.id);
     safeAudit({
       event_type: "cabinet_create",
       action: "cabinet_create",
@@ -240,6 +241,7 @@ export async function createCabinet(payload) {
       allow_consultation: data?.allow_consultation ?? allow_consultation,
       allow_self_borrow: data?.allow_self_borrow ?? allow_self_borrow,
       allow_admin_lending: data?.allow_admin_lending ?? allow_admin_lending,
+      qr_code: qr,
     };
   }
 
@@ -254,6 +256,7 @@ export async function createCabinet(payload) {
     allow_admin_lending,
   });
   const created = viaFn?.cabinet ?? viaFn;
+  const qr = viaFn?.qr_code ?? viaFn?.qr ?? await generateCabinetQr(created?.id);
   safeAudit({
     event_type: "cabinet_create",
     action: "cabinet_create",
@@ -268,7 +271,16 @@ export async function createCabinet(payload) {
     allow_consultation: created?.allow_consultation ?? allow_consultation,
     allow_self_borrow: created?.allow_self_borrow ?? allow_self_borrow,
     allow_admin_lending: created?.allow_admin_lending ?? allow_admin_lending,
+    qr_code: qr,
   };
+}
+
+export async function generateCabinetQr(cabinetId) {
+  const id = Number(cabinetId);
+  if (!Number.isFinite(id) || id <= 0) throw new Error("cabinet_id invalide.");
+  return await callFunctionRaw("cabinet-qr-generate", {
+    cabinet_id: Math.trunc(id),
+  });
 }
 
 export async function updateCabinet(cabinetId, patch) {
