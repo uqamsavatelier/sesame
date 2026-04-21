@@ -21,6 +21,11 @@ import {
   createKeySuggestion,
   createCabinet,
   generateCabinetQr,
+  listMyCabinetManagerAssignments,
+  listCabinetManagers,
+  listCabinetManagerCandidates,
+  addCabinetManager,
+  removeCabinetManager,
   updateCabinet,
   getCabinetUsage,
   deleteCabinet,
@@ -30,7 +35,7 @@ import {
   listLoansByBorrower,
   rpcAdminCreateLoan,
   rpcAdminCreateKeyringLoan,
-} from "./api.js?v=20260421a";
+} from "./api.js?v=20260421e";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks, logAuditEvent } from "./audit.js";
 
 
@@ -158,7 +163,14 @@ function getCurrentUserGroup() {
   return normalizeGroup(state.profile?.user_group ?? "employe");
 }
 
-function canAdministrateCabinet(cabinetOrId) {
+function isCabinetManager(cabinetOrId) {
+  const cabinetId = typeof cabinetOrId === "object" && cabinetOrId
+    ? Number(cabinetOrId.id)
+    : Number(cabinetOrId);
+  return Number.isFinite(cabinetId) && state.managedCabinetIds?.has(Math.trunc(cabinetId));
+}
+
+function canConfigureCabinet(cabinetOrId) {
   const cabinet = typeof cabinetOrId === "object" && cabinetOrId
     ? cabinetOrId
     : state.cabinets.find((row) => Number(row.id) === Number(cabinetOrId));
@@ -168,8 +180,32 @@ function canAdministrateCabinet(cabinetOrId) {
   return normalizeGroup(cabinet.user_group) === getCurrentUserGroup();
 }
 
+function canAdministrateCabinet(cabinetOrId) {
+  const cabinet = typeof cabinetOrId === "object" && cabinetOrId
+    ? cabinetOrId
+    : state.cabinets.find((row) => Number(row.id) === Number(cabinetOrId));
+  if (!cabinet) return false;
+  return canConfigureCabinet(cabinet) || isCabinetManager(cabinet);
+}
+
 function canAdministrateCurrentCabinet() {
   return canAdministrateCabinet(state.cabinetId);
+}
+
+function canConfigureCurrentCabinet() {
+  return canConfigureCabinet(state.cabinetId);
+}
+
+function canManageCabinetManagers(cabinetOrId) {
+  return canConfigureCabinet(cabinetOrId);
+}
+
+function canCabinetAction(action, cabinetOrId = state.cabinetId) {
+  const key = String(action ?? "").trim();
+  if (!key) return false;
+  if (canRole(key)) return true;
+  return canAdministrateCabinet(cabinetOrId)
+    && ["creation", "edition", "deplacement", "suppression", "retour", "emprunt"].includes(key);
 }
 
 function getCabinetPolicy(cabinetOrId = state.cabinetId) {
@@ -191,11 +227,11 @@ function canConsultCabinet(cabinetOrId) {
 function canAdminLendCabinet(cabinetOrId = state.cabinetId) {
   return canAdministrateCabinet(cabinetOrId)
     && getCabinetPolicy(cabinetOrId).allow_admin_lending
-    && canRole("emprunt");
+    && canCabinetAction("emprunt", cabinetOrId);
 }
 
 function canSelfBorrowCabinet(cabinetOrId = state.cabinetId) {
-  return getCabinetPolicy(cabinetOrId).allow_self_borrow && canRole("emprunt");
+  return getCabinetPolicy(cabinetOrId).allow_self_borrow && canCabinetAction("emprunt", cabinetOrId);
 }
 
 function filterCabinetsForCurrentUser(cabinets) {
@@ -918,6 +954,8 @@ let state = {
   profile: null,
   cabinets: [],
   cabinetId: null,
+  managedCabinetIds: new Set(),
+  managedCabinetRows: [],
   pavilions: [],
   keys: [],
   keyrings: [],
@@ -1009,6 +1047,10 @@ let state = {
   cabinetEditModal: {
     open: false,
     cabinetId: null,
+    managers: [],
+    managerCandidates: [],
+    managerSearch: "",
+    managersLoading: false,
   },
   cabinetQrModal: {
     open: false,
@@ -1742,7 +1784,8 @@ function renderCabinetGrid() {
     ? state.cabinets
     : state.cabinets.filter((c) => c.is_active !== false);
   grid.innerHTML = cards.map((c) => {
-    const canEditCabinet = canAdministrateCabinet(c);
+    const canUseCabinetAdmin = canAdministrateCabinet(c);
+    const canEditCabinet = canConfigureCabinet(c);
     const metaParts = [];
     if (c.is_active === false) metaParts.push("Hors fonction");
     if (c.location) metaParts.push(c.location);
@@ -1753,9 +1796,9 @@ function renderCabinetGrid() {
     if (c.allow_consultation !== false) metaParts.push("Consultation");
     if (c.allow_self_borrow !== false) metaParts.push("Emprunts");
     if (c.allow_admin_lending === true) metaParts.push("Prêts admin");
-    const adminActions = canEditCabinet
+    const adminActions = canUseCabinetAdmin
       ? (c.is_active === false
-        ? `<button class="btn secondary reactive cabinet-reactivate-btn" data-cabinet-id="${c.id}" type="button">Remettre en fonction</button>`
+        ? (canEditCabinet ? `<button class="btn secondary reactive cabinet-reactivate-btn" data-cabinet-id="${c.id}" type="button">Remettre en fonction</button>` : "")
         : `<div class="cabinet-actions">
             <button class="btn secondary icon-btn cabinet-qr-btn" data-cabinet-id="${c.id}" type="button" aria-label="Code QR de l'armoire" title="Code QR">
               <span class="qr-button-icon" aria-hidden="true">
@@ -1766,7 +1809,7 @@ function renderCabinetGrid() {
                 <span class="qr-module qr-module-b"></span>
               </span>
             </button>
-            <button class="btn secondary icon-btn btn-edit cabinet-edit-btn" data-cabinet-id="${c.id}" type="button" aria-label="Éditer l'armoire" title="Éditer">✎</button>
+            ${canEditCabinet ? `<button class="btn secondary icon-btn btn-edit cabinet-edit-btn" data-cabinet-id="${c.id}" type="button" aria-label="Éditer l'armoire" title="Éditer">✎</button>` : ""}
           </div>`)
       : "";
     return `
@@ -1789,7 +1832,7 @@ function renderCabinetGrid() {
           e.stopPropagation();
           const id = Number(reactivateBtn.dataset.cabinetId);
           const cabinet = state.cabinets.find((row) => Number(row.id) === id);
-          if (!canAdministrateCabinet(cabinet)) return;
+          if (!canConfigureCabinet(cabinet)) return;
           if (!Number.isFinite(id)) return;
           const ok = confirm("Voulez vous remettre en fonction cette armoire ?");
           if (!ok) return;
@@ -1814,7 +1857,7 @@ function renderCabinetGrid() {
         e.stopPropagation();
         const editId = Number(editBtn.dataset.cabinetId);
         const cabinet = state.cabinets.find((row) => Number(row.id) === editId);
-        if (!canAdministrateCabinet(cabinet)) return;
+        if (!canConfigureCabinet(cabinet)) return;
         if (Number.isFinite(editId)) await openCabinetEditModal(editId);
         return;
       }
@@ -1843,9 +1886,97 @@ function renderCabinetGrid() {
   }
 }
 
+function renderCabinetManagersEditor() {
+  const section = $("cabinetManagersSection");
+  if (!section) return;
+  const cabinetId = Number(state.cabinetEditModal.cabinetId);
+  const canManage = canManageCabinetManagers(cabinetId);
+  section.hidden = !canManage;
+  if (!canManage) return;
+
+  const managers = Array.isArray(state.cabinetEditModal.managers) ? state.cabinetEditModal.managers : [];
+  const managerIds = new Set(managers.map((row) => String(row.user_id || row.user?.id || "")));
+  const search = String(state.cabinetEditModal.managerSearch || "").trim().toLowerCase();
+  const candidates = (state.cabinetEditModal.managerCandidates || [])
+    .filter((user) => !managerIds.has(String(user.id)))
+    .filter((user) => {
+      if (!search) return true;
+      const hay = `${user.display_name ?? ""} ${groupLabel(user.user_group)} ${user.id ?? ""}`.toLowerCase();
+      return hay.includes(search);
+    })
+    .slice(0, 8);
+
+  const listEl = $("cabinetManagersList");
+  const resultsEl = $("cabinetManagerResults");
+  const searchEl = $("cabinetManagerSearch");
+  if (searchEl && searchEl.value !== state.cabinetEditModal.managerSearch) {
+    searchEl.value = state.cabinetEditModal.managerSearch;
+  }
+
+  if (state.cabinetEditModal.managersLoading) {
+    listEl.innerHTML = `<div class="muted">Chargement des responsables...</div>`;
+    resultsEl.innerHTML = "";
+    return;
+  }
+
+  listEl.innerHTML = managers.length
+    ? managers.map((row) => {
+        const user = row.user || {};
+        return `
+          <div class="cabinet-manager-row">
+            <div>
+              <div class="cabinet-manager-name">${escapeHtml(user.display_name || "Sans nom")}</div>
+              <div class="muted">${escapeHtml(groupLabel(user.user_group))}</div>
+            </div>
+            <button class="btn secondary reactive cabinet-manager-remove" type="button" data-user-id="${escapeHtml(row.user_id || user.id)}">Retirer</button>
+          </div>
+        `;
+      }).join("")
+    : `<div class="muted">Aucun responsable assigné.</div>`;
+
+  if (!search) {
+    resultsEl.innerHTML = "";
+    return;
+  }
+  resultsEl.innerHTML = candidates.length
+    ? candidates.map((user) => `
+        <button class="cabinet-manager-result" type="button" data-user-id="${escapeHtml(user.id)}">
+          <span>${escapeHtml(user.display_name || "Sans nom")}</span>
+          <span class="muted">${escapeHtml(groupLabel(user.user_group))}</span>
+        </button>
+      `).join("")
+    : `<div class="cabinet-manager-empty muted">Aucun utilisateur admissible.</div>`;
+}
+
+async function loadCabinetManagersEditor(cabinetId) {
+  if (!canManageCabinetManagers(cabinetId)) return;
+  try {
+    const [managers, candidates] = await Promise.all([
+      listCabinetManagers(cabinetId),
+      listCabinetManagerCandidates(cabinetId),
+    ]);
+    if (Number(state.cabinetEditModal.cabinetId) !== Number(cabinetId)) return;
+    state.cabinetEditModal.managers = managers;
+    state.cabinetEditModal.managerCandidates = candidates;
+  } catch (e) {
+    $("cabEditStatus").textContent = `Erreur responsables: ${e?.message ?? e}`;
+  } finally {
+    if (Number(state.cabinetEditModal.cabinetId) === Number(cabinetId)) {
+      state.cabinetEditModal.managersLoading = false;
+      renderCabinetManagersEditor();
+    }
+  }
+}
+
+async function refreshCabinetManagersEditor(cabinetId) {
+  state.cabinetEditModal.managersLoading = true;
+  renderCabinetManagersEditor();
+  await loadCabinetManagersEditor(cabinetId);
+}
+
 async function openCabinetEditModal(cabinetId) {
   const cab = state.cabinets.find((c) => Number(c.id) === Number(cabinetId));
-  if (!cab || !canAdministrateCabinet(cab)) return;
+  if (!cab || !canConfigureCabinet(cab)) return;
   const wasOpen = state.cabinetEditModal.open;
   if (!state.pavilions?.length) {
     try {
@@ -1856,6 +1987,10 @@ async function openCabinetEditModal(cabinetId) {
   }
   state.cabinetEditModal.open = true;
   state.cabinetEditModal.cabinetId = Number(cab.id);
+  state.cabinetEditModal.managers = [];
+  state.cabinetEditModal.managerCandidates = [];
+  state.cabinetEditModal.managerSearch = "";
+  state.cabinetEditModal.managersLoading = true;
   $("cab_edit_name").value = String(cab.name ?? "");
   $("cab_edit_location").value = String(cab.location ?? "");
   $("cab_edit_max_hooks").value = Number.isFinite(Number(cab.max_hooks)) && Number(cab.max_hooks) > 0
@@ -1870,16 +2005,22 @@ async function openCabinetEditModal(cabinetId) {
   $("cab_edit_allow_admin_lending").checked = cab.allow_admin_lending === true;
   $("cab_edit_is_active").value = cab.is_active === false ? "false" : "true";
   $("cabEditStatus").textContent = "";
+  renderCabinetManagersEditor();
   $("cabinetEditOverlay").hidden = false;
   $("cabinetEditModal").hidden = false;
   $("cabinetEditModal").setAttribute("aria-hidden", "false");
   openTrackedModal("cabinetEdit", wasOpen);
+  await loadCabinetManagersEditor(cab.id);
 }
 
 function closeCabinetEditModal(options = {}) {
   closeTrackedModal("cabinetEdit", () => {
     state.cabinetEditModal.open = false;
     state.cabinetEditModal.cabinetId = null;
+    state.cabinetEditModal.managers = [];
+    state.cabinetEditModal.managerCandidates = [];
+    state.cabinetEditModal.managerSearch = "";
+    state.cabinetEditModal.managersLoading = false;
     $("cabinetEditOverlay").hidden = true;
     $("cabinetEditModal").hidden = true;
     $("cabinetEditModal").setAttribute("aria-hidden", "true");
@@ -2036,7 +2177,12 @@ function filterHook(hookNo, keysForHook, keyringsForHook, q) {
 
 async function loadCabinets() {
   const cabinets = await listCabinets({ includeInactive: isAdminRole(state.role) });
-  state.cabinets = filterCabinetsForCurrentUser(cabinets);
+  const byId = new Map((cabinets || []).map((cabinet) => [Number(cabinet.id), cabinet]));
+  for (const cabinet of state.managedCabinetRows || []) {
+    const id = Number(cabinet?.id);
+    if (Number.isFinite(id) && !byId.has(id)) byId.set(id, cabinet);
+  }
+  state.cabinets = filterCabinetsForCurrentUser([...byId.values()]);
   const activeCabinets = state.cabinets.filter((c) => c.is_active !== false);
   const sel = $("cabinetSelect");
   sel.innerHTML = activeCabinets
@@ -2047,6 +2193,18 @@ async function loadCabinets() {
   const stillAvailable = activeCabinets.find((c) => Number(c.id) === currentCabinetId);
   state.cabinetId = stillAvailable?.id ?? activeCabinets[0]?.id ?? null;
   if (state.cabinetId != null) sel.value = String(state.cabinetId);
+}
+
+async function loadMyCabinetManagerIds() {
+  try {
+    const payload = await listMyCabinetManagerAssignments();
+    state.managedCabinetIds = new Set(payload.cabinet_ids || []);
+    state.managedCabinetRows = payload.cabinets || [];
+  } catch (e) {
+    state.managedCabinetIds = new Set();
+    state.managedCabinetRows = [];
+    console.warn("[cabinet_managers] lecture impossible.", e?.message ?? e);
+  }
 }
 
 async function loadDataForCabinet() {
@@ -2505,14 +2663,14 @@ function renderHookModal(hookNo) {
   const { keyringsForHook, singles } = getHookDetail(hookNo);
   $("hookModalTitle").textContent = `Crochet #${hookNo}`;
 
-  const canBorrow = canRole("emprunt");
-  const canReturn = canRole("retour");
+  const canBorrow = canCabinetAction("emprunt");
+  const canReturn = canCabinetAction("retour");
   const canSignal = canRole("signalement");
   const canSuggest = canRole("suggestion");
-  const canEdit = canRole("edition");
-  const canDelete = canRole("suppression");
-  const canCreate = canRole("creation");
-  const canMove = canRole("deplacement");
+  const canEdit = canCabinetAction("edition");
+  const canDelete = canCabinetAction("suppression");
+  const canCreate = canCabinetAction("creation");
+  const canMove = canCabinetAction("deplacement");
   const canAdminCurrentCabinet = canAdministrateCurrentCabinet();
   const canAdminLendCurrentCabinet = canAdminLendCabinet();
   const canSelfBorrowCurrentCabinet = canSelfBorrowCabinet();
@@ -3522,6 +3680,47 @@ renderHookExistingDetails(Number($("m_hook").value));
   $("cabEditClose").addEventListener("click", closeCabinetEditModal);
   $("cabEditCancel").addEventListener("click", closeCabinetEditModal);
   $("cabinetEditOverlay").addEventListener("click", closeCabinetEditModal);
+  $("cabinetManagerSearch").addEventListener("input", (e) => {
+    state.cabinetEditModal.managerSearch = e.target.value || "";
+    renderCabinetManagersEditor();
+  });
+  $("cabinetManagerResults").addEventListener("click", async (e) => {
+    const btn = e.target.closest("button.cabinet-manager-result[data-user-id]");
+    if (!btn) return;
+    const cabinetId = Number(state.cabinetEditModal.cabinetId);
+    const userId = String(btn.dataset.userId || "").trim();
+    if (!Number.isFinite(cabinetId) || !userId) return;
+    try {
+      btn.disabled = true;
+      $("cabEditStatus").textContent = "Ajout du responsable...";
+      state.cabinetEditModal.managers = await addCabinetManager(cabinetId, userId);
+      state.cabinetEditModal.managerSearch = "";
+      $("cabEditStatus").textContent = "";
+      await refreshCabinetManagersEditor(cabinetId);
+    } catch (err) {
+      $("cabEditStatus").textContent = `Erreur: ${err?.message ?? err}`;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+  $("cabinetManagersList").addEventListener("click", async (e) => {
+    const btn = e.target.closest("button.cabinet-manager-remove[data-user-id]");
+    if (!btn) return;
+    const cabinetId = Number(state.cabinetEditModal.cabinetId);
+    const userId = String(btn.dataset.userId || "").trim();
+    if (!Number.isFinite(cabinetId) || !userId) return;
+    try {
+      btn.disabled = true;
+      $("cabEditStatus").textContent = "Retrait du responsable...";
+      state.cabinetEditModal.managers = await removeCabinetManager(cabinetId, userId);
+      $("cabEditStatus").textContent = "";
+      await refreshCabinetManagersEditor(cabinetId);
+    } catch (err) {
+      $("cabEditStatus").textContent = `Erreur: ${err?.message ?? err}`;
+    } finally {
+      btn.disabled = false;
+    }
+  });
   $("cabEditSave").addEventListener("click", async () => {
     const cabinetId = Number(state.cabinetEditModal.cabinetId);
     if (!Number.isFinite(cabinetId)) return;
@@ -3631,9 +3830,7 @@ function setTab(which) {
 
 $("tabCsv").addEventListener("click", () => setTab("csv"));
 $("tabManual").addEventListener("click", () => setTab("manual"));
-
-
-
+  await loadMyCabinetManagerIds();
   await loadCabinets();
   renderNav(state.profile, state.role);
   // choisir cabinet depuis URL (ou dernier scan)
@@ -3713,7 +3910,7 @@ $("tabManual").addEventListener("click", () => setTab("manual"));
   const modeNow = getModeFromUrl();
   $("btnAddKeys").style.display = modeNow === "qr"
     ? "none"
-    : (canAdministrateCurrentCabinet() && canRole("creation") ? "" : "none");
+    : (canAdministrateCurrentCabinet() && canCabinetAction("creation") ? "" : "none");
   $("btnAddCabinet").style.display = isAdminRole(state.role) && canRole("creation") ? "" : "none";
   const isRestrictedCabinetMode = modeNow === "qr" || (state.role === "user" && modeNow === "scan");
   const cabinetSelect = $("cabinetSelect");
@@ -4062,7 +4259,7 @@ $("m_is_keyring").addEventListener("change", (e) => {
         if (!canAdminLendCabinet()) throw new Error("Permission refusée: prêt administrateur.");
         await openAdminLoanModal({ mode: "keyring", keyringId });
       } else if (action === "keyring-return") {
-        if (!canRole("retour")) throw new Error("Permission refusée: retour.");
+        if (!canCabinetAction("retour")) throw new Error("Permission refusée: retour.");
         const kr = state.keyrings.find(k => k.id === keyringId);
         if (!kr) throw new Error("Trousseau introuvable.");
         await fnLoanReturnKeyring(
@@ -4071,11 +4268,11 @@ $("m_is_keyring").addEventListener("change", (e) => {
           String(kr.ring_code ?? "").toUpperCase(),
         );
       } else if (action === "keyring-edit") {
-        if (!canRole("edition")) throw new Error("Permission refusée: édition.");
+        if (!canCabinetAction("edition")) throw new Error("Permission refusée: édition.");
         openKeyringEditModal(keyringId);
         return;
       } else if (action === "keyring-delete") {
-        if (!canRole("suppression")) throw new Error("Permission refusée: suppression.");
+        if (!canCabinetAction("suppression")) throw new Error("Permission refusée: suppression.");
         if (!confirm("Supprimer ce trousseau ?")) return;
         const { error: clearErr } = await supa
           .from("keys")
@@ -4101,7 +4298,7 @@ $("m_is_keyring").addEventListener("change", (e) => {
         if (!canAdminLendCabinet()) throw new Error("Permission refusée: prêt administrateur.");
         await openAdminLoanModal({ mode: "key", keyId });
       } else if (action === "key-return") {
-        if (!canRole("retour")) throw new Error("Permission refusée: retour.");
+        if (!canCabinetAction("retour")) throw new Error("Permission refusée: retour.");
         const loan = state.loansByKey?.get(keyId);
         if (loan && state.profile?.id && loan.borrower_id !== state.profile.id) {
           const borrowerName = loanBorrowerLabel(loan);
@@ -4172,11 +4369,11 @@ $("m_is_keyring").addEventListener("change", (e) => {
         if (!canRole("signalement")) throw new Error("Permission refusée: signalement.");
         await fnReportFound(keyId);
       } else if (action === "key-edit") {
-        if (!canRole("edition")) throw new Error("Permission refusée: édition.");
+        if (!canCabinetAction("edition")) throw new Error("Permission refusée: édition.");
         openEditModal(keyId);
         return;
       } else if (action === "key-delete") {
-        if (!canRole("suppression")) throw new Error("Permission refusée: suppression.");
+        if (!canCabinetAction("suppression")) throw new Error("Permission refusée: suppression.");
         const key = state.keys.find(k => k.id === keyId);
         if (key?.keyring_id) {
           openKeyInRingModal(keyId);

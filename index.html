@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Gestion clés — Accueil</title>
-  <link rel="stylesheet" href="./style.css?v=20260421d" />
+  <link rel="stylesheet" href="./style.css?v=20260421e" />
 </head>
 <body class="loading">
 
@@ -187,6 +187,14 @@
           <span>Prêts par l'administrateur</span>
         </label>
       </div>
+    </div>
+    <div id="cabinetManagersSection" class="field cabinet-managers-section" style="grid-column:1 / -1;" hidden>
+      <div class="muted" style="margin-bottom:6px;">Responsables du cabinet</div>
+      <div class="cabinet-manager-picker">
+        <input id="cabinetManagerSearch" class="input" placeholder="Rechercher un utilisateur" autocomplete="off" />
+        <div id="cabinetManagerResults" class="cabinet-manager-results"></div>
+      </div>
+      <div id="cabinetManagersList" class="cabinet-managers-list"></div>
     </div>
     <label class="field">
       <div class="muted">En fonction</div>
@@ -785,8 +793,8 @@
   <div class="app-version"></div>
 
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script type="module" src="./app.js?v=20260421d"></script>
-<script type="module" src="./version.js?v=20260421a"></script>
+  <script type="module" src="./app.js?v=20260421e"></script>
+<script type="module" src="./version.js?v=20260421e"></script>
 </body>
 </html>
 

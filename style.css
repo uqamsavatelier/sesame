@@ -880,6 +880,55 @@ body[data-theme="light"] .tutorial-close{
 .cabinet-qr-link-field{
   min-width: 0;
 }
+.cabinet-managers-section{
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.cabinet-manager-picker{
+  position: relative;
+}
+.cabinet-manager-results{
+  display:grid;
+  gap:6px;
+  margin-top:6px;
+}
+.cabinet-manager-result{
+  width:100%;
+  border:1px solid var(--border);
+  border-radius:8px;
+  background: rgba(255,255,255,.04);
+  color: var(--text);
+  padding:8px 10px;
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  cursor:pointer;
+  font: inherit;
+  text-align:left;
+}
+.cabinet-manager-result:hover{
+  border-color: rgba(79,156,255,.45);
+}
+.cabinet-manager-empty{
+  padding: 6px 0;
+}
+.cabinet-managers-list{
+  display:grid;
+  gap:8px;
+  margin-top:10px;
+}
+.cabinet-manager-row{
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:8px 10px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.cabinet-manager-name{
+  font-weight:700;
+}
 
 @media (max-width: 640px){
   .cabinet-qr-layout{

@@ -283,6 +283,75 @@ export async function generateCabinetQr(cabinetId) {
   });
 }
 
+export async function listMyCabinetManagerIds() {
+  const payload = await callFunctionRaw("cabinet-managers", {
+    action: "list_mine",
+  });
+  return (payload?.cabinet_ids ?? [])
+    .map((id) => Number(id))
+    .filter(Number.isFinite)
+    .map((id) => Math.trunc(id));
+}
+
+export async function listMyCabinetManagerAssignments() {
+  const payload = await callFunctionRaw("cabinet-managers", {
+    action: "list_mine",
+  });
+  return {
+    cabinet_ids: (payload?.cabinet_ids ?? [])
+      .map((id) => Number(id))
+      .filter(Number.isFinite)
+      .map((id) => Math.trunc(id)),
+    cabinets: payload?.cabinets ?? [],
+  };
+}
+
+export async function listCabinetManagers(cabinetId) {
+  const id = Number(cabinetId);
+  if (!Number.isFinite(id) || id <= 0) throw new Error("cabinet_id invalide.");
+  const payload = await callFunctionRaw("cabinet-managers", {
+    action: "list_for_cabinet",
+    cabinet_id: Math.trunc(id),
+  });
+  return payload?.managers ?? [];
+}
+
+export async function listCabinetManagerCandidates(cabinetId) {
+  const id = Number(cabinetId);
+  if (!Number.isFinite(id) || id <= 0) throw new Error("cabinet_id invalide.");
+  const payload = await callFunctionRaw("cabinet-managers", {
+    action: "list_candidates",
+    cabinet_id: Math.trunc(id),
+  });
+  return payload?.users ?? [];
+}
+
+export async function addCabinetManager(cabinetId, userId) {
+  const id = Number(cabinetId);
+  const uid = String(userId ?? "").trim();
+  if (!Number.isFinite(id) || id <= 0) throw new Error("cabinet_id invalide.");
+  if (!uid) throw new Error("Utilisateur invalide.");
+  const payload = await callFunctionRaw("cabinet-managers", {
+    action: "add",
+    cabinet_id: Math.trunc(id),
+    user_id: uid,
+  });
+  return payload?.managers ?? [];
+}
+
+export async function removeCabinetManager(cabinetId, userId) {
+  const id = Number(cabinetId);
+  const uid = String(userId ?? "").trim();
+  if (!Number.isFinite(id) || id <= 0) throw new Error("cabinet_id invalide.");
+  if (!uid) throw new Error("Utilisateur invalide.");
+  const payload = await callFunctionRaw("cabinet-managers", {
+    action: "remove",
+    cabinet_id: Math.trunc(id),
+    user_id: uid,
+  });
+  return payload?.managers ?? [];
+}
+
 export async function updateCabinet(cabinetId, patch) {
   const id = Number(cabinetId);
   if (!Number.isFinite(id)) throw new Error("cabinet_id invalide.");
