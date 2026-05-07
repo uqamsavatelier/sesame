@@ -128,6 +128,7 @@ async function callFunctionRaw(name, body) {
       source: "frontend",
     });
     const err = new Error(`${name}: ${msg}`);
+    err.httpStatus = res.status;
     err.payload = payload; // <-- on attache les dÃƒÂ©tails
     throw err;
   }

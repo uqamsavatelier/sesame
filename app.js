@@ -2568,7 +2568,8 @@ async function fnLoanReturnByKeyLocal(key_id) {
 async function fnLoanReturnAny({ loan_id, key_id }) {
   const body = {};
   if (Number.isFinite(loan_id)) body.loan_id = loan_id;
-  if (Number.isFinite(key_id)) body.key_id = key_id;
+  else if (Number.isFinite(key_id)) body.key_id = key_id;
+  else throw new Error("Identifiant d'emprunt introuvable.");
   const { data, error } = await supa.functions.invoke("loan-return-any", { body });
   if (error) throw error;
   const key = Number.isFinite(key_id) ? state.keys.find((k) => Number(k.id) === Number(key_id)) : null;
