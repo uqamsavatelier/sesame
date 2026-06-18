@@ -1,197 +1,1023 @@
-// Timestamp: 2026-06-18 14:37:14 -04:00
-// js/api.js
-import { CONFIG } from './config.js';
+import { supa, SUPABASE_URL, SUPABASE_ANON_KEY } from "./supabaseClient.js";
+import { ensureAuditSyncStarted, logAuditEvent } from "./audit.js";
 
-// Appel générique à l’API kiosque-reparation (Edge function)
-export async function api(path, opts = {}) {
-  if (!CONFIG.USE_MOCK && !CONFIG.API_BASE) {
-    throw new Error('API_BASE manquant');
+ensureAuditSyncStarted();
+
+function safeAudit(input) {
+  void logAuditEvent(input);
+}
+
+function toIntOrNull(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.trunc(n) : null;
+}
+
+function normalizeGroup(group) {
+  const raw = String(group ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replaceAll("-", "_")
+    .replace(/\s+/g, "_");
+
+  if (raw === "direction") return "direction";
+  if (raw === "affichage") return "affichage";
+  return "employe";
+}
+
+function keyNoLabel(ref) {
+  const keyNo = String(ref?.key_no ?? "").trim();
+  if (keyNo) return keyNo;
+  return String(ref?.id ?? "?");
+}
+
+function formatKeyTarget(ref) {
+  const cab = toIntOrNull(ref?.cabinet_id);
+  const hook = toIntOrNull(ref?.hook_no);
+  const keyNo = keyNoLabel(ref);
+  return `key:${cab ?? "?"}/${hook ?? "?"}/${keyNo}`;
+}
+
+function formatHookTarget(ref) {
+  const cab = toIntOrNull(ref?.cabinet_id);
+  const hook = toIntOrNull(ref?.hook_no);
+  return `hook:${cab ?? "?"}/${hook ?? "?"}`;
+}
+
+function formatKeyringTarget(ref) {
+  const cab = toIntOrNull(ref?.cabinet_id);
+  const hook = toIntOrNull(ref?.hook_no);
+  const code = String(ref?.ring_code ?? "").trim().toUpperCase() || "?";
+  return `keyring:${cab ?? "?"}/${hook ?? "?"}/${code}`;
+}
+
+async function getKeyRefById(keyId) {
+  const id = toIntOrNull(keyId);
+  if (id == null) return null;
+  const { data } = await supa
+    .from("keys")
+    .select("id,cabinet_id,hook_no,key_no")
+    .eq("id", id)
+    .maybeSingle();
+  return data ?? null;
+}
+
+async function getLoanRefById(loanId) {
+  const id = toIntOrNull(loanId);
+  if (id == null) return null;
+  const { data } = await supa
+    .from("loans")
+    .select("id,key_id")
+    .eq("id", id)
+    .maybeSingle();
+  return data ?? null;
+}
+async function callFunctionRaw(name, body) {
+  const { data: sessData, error: sessErr } = await supa.auth.getSession();
+  if (sessErr) {
+    safeAudit({
+      event_type: "system_comm_error",
+      action: name,
+      target: "auth.getSession",
+      details: sessErr.message || String(sessErr),
+      status: "error",
+      source: "frontend",
+    });
+    throw sessErr;
   }
-  if (CONFIG.USE_MOCK) {
-    return mockApi(path, opts);
+  const token = sessData?.session?.access_token;
+  if (!token) {
+    safeAudit({
+      event_type: "system_comm_error",
+      action: name,
+      target: "auth.access_token",
+      details: "Pas de session (access_token manquant).",
+      status: "error",
+      source: "frontend",
+    });
+    throw new Error("Pas de session (access_token manquant).");
   }
 
-  const url = `${CONFIG.API_BASE}${path}`;
-  const headers = {
-    'Content-Type': 'application/json',
-  };
-
-  const res = await fetch(url, {
-    method: opts.method || 'POST',
-    headers,
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/${name}`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "authorization": `Bearer ${token}`,
+      "apikey": SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify(body),
   });
 
+  const text = await res.text();
+  let payload = null;
+  try { payload = text ? JSON.parse(text) : null; } catch { payload = text; }
+
   if (!res.ok) {
-    const text = await res.text();
-    console.error('Erreur API', path, res.status, text);
-    throw new Error(`API error ${res.status}`);
+    const msg = (payload && typeof payload === "object")
+      ? (payload.error || payload.message || JSON.stringify(payload))
+      : (String(payload || text || "").trim() || `HTTP ${res.status}`);
+    console.error(`[${name}] FAILED`, res.status, payload ?? text);
+    safeAudit({
+      event_type: "system_comm_error",
+      action: name,
+      target: "edge_function",
+      details: msg,
+      status: "error",
+      http_status: res.status,
+      source: "frontend",
+    });
+    const err = new Error(`${name}: ${msg}`);
+    err.httpStatus = res.status;
+    err.payload = payload; // <-- on attache les dÃƒÂ©tails
+    throw err;
   }
 
-  return res.json();
-}
-// Liste les BT assignés à un technicien (par son username)
-export async function apiListMesBT(username) {
-  if (!username) {
-    throw new Error("username manquant pour apiListMesBT");
-  }
-
-  const url = `/repairs/by-tech?username=${encodeURIComponent(username)}`;
-
-  // On suppose que api() préfixe déjà avec l'URL de la edge function Supabase
-  const data = await api(url, { method: "GET" });
-
-  if (!data || data.ok === false) {
-    throw new Error(data?.error || "Erreur inconnue dans apiListMesBT");
-  }
-
-  return data.items || [];
-}
-
-export async function apiListRepairsCache(limit = 100) {
-  if (!CONFIG.REPAIRS_CACHE_API) {
-    throw new Error("REPAIRS_CACHE_API manquant");
-  }
-
-  const url = new URL(CONFIG.REPAIRS_CACHE_API);
-  const wantedLimit = Number(limit);
-  if (Number.isFinite(wantedLimit) && wantedLimit > 0) {
-    url.searchParams.set("limit", String(Math.floor(wantedLimit)));
-  }
-
-  const res = await fetch(url.toString(), { method: "GET" });
-  if (!res.ok) {
-    const text = await res.text();
-    console.error("Erreur apiListRepairsCache", res.status, text);
-    throw new Error(`repairs-cache error ${res.status}`);
-  }
-
-  const data = await res.json();
-  if (!data || data.ok === false) {
-    throw new Error(data?.error || "Erreur inconnue dans apiListRepairsCache");
-  }
-
-  return Array.isArray(data.items) ? data.items : [];
-}
-
-export async function apiFetchOverviewHome(limit = 5) {
-  const wantedLimit = Number(limit);
-  const qs = Number.isFinite(wantedLimit) && wantedLimit > 0
-    ? `?limit=${encodeURIComponent(String(Math.floor(wantedLimit)))}`
-    : '';
-
-  const data = await api(`/repairs/overview/home${qs}`, { method: 'GET' });
-  if (!data || data.ok === false) {
-    throw new Error(data?.error || 'Erreur inconnue dans apiFetchOverviewHome');
-  }
-
-  return {
-    open: Array.isArray(data.open) ? data.open : [],
-    done: Array.isArray(data.done) ? data.done : [],
-  };
-}
-
-// Recherche d'un BT par ID unique ou code (ex. "REP1437", "rep1437", "1437")
-export async function apiGetBTById(idUnique) {
-  const value = String(idUnique ?? '').trim();
-  if (!value) {
-    throw new Error('ID unique vide');
-  }
-
-  console.log('[apiGetBTById] Appel /repairs/by-id avec id_unique =', value);
-
-  const res = await fetch(`${CONFIG.API_BASE}/repairs/by-id`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id_unique: value }), // ⬅️ cohérent avec le Edge
-  });
-
-  const rawText = await res.text();
-  console.log('[apiGetBTById] HTTP', res.status, 'raw response =', rawText);
-
-  let data = null;
-  try {
-    data = JSON.parse(rawText);
-  } catch (e) {
-    console.error('[apiGetBTById] JSON.parse error', e);
-    throw new Error("Réponse invalide du serveur");
-  }
-
-  // Cas OK
-  if (res.ok && data && data.ok && data.item) {
-    return data.item;
-  }
-
-  // Cas "podioError" renvoyé par le Edge
-  if (data && data.podioError) {
-    throw new Error(`Erreur Podio (raison: ${data.reason || 'inconnue'})`);
-  }
-
-  // Cas "pas trouvé" ou autre
-  throw new Error(data?.error || 'BT introuvable');
+  console.log(`[${name}] OK`, payload);
+  return payload;
 }
 
 
+/* -------------------- LISTES -------------------- */
 
-// Lookup Podio/Hector (Edge podio-lookup)
-export async function apiLookupInventory(inventory) {
-  const res = await fetch(
-    `${CONFIG.LOOKUP_BASE}/by-inventory?inventory=${encodeURIComponent(inventory)}`
-  );
-  if (!res.ok) throw new Error(`lookup error ${res.status}`);
-  return res.json();
-}
-
-// Rafraîchit le "dernier bon créé" via repairs-list et podio-lookup
-export async function refreshLastCreated() {
-  if (!CONFIG.REPAIRS_CACHE_API) return;
-
-  try {
-    const res = await fetch(CONFIG.REPAIRS_CACHE_API);
-    if (!res.ok) {
-      console.warn('Impossible de récupérer repairs-list', res.status);
-      return;
+export async function listCabinets(options = {}) {
+  const includeInactive = !!options?.includeInactive;
+  const selects = [
+    "id,name,location,is_active,max_hooks,pavilion_id,user_group,allow_consultation,allow_self_borrow,allow_admin_lending",
+    "id,name,location,is_active,max_hooks,user_group,allow_consultation,allow_self_borrow,allow_admin_lending",
+    "id,name,location,is_active,user_group,allow_consultation,allow_self_borrow,allow_admin_lending",
+    "id,name,location,is_active,max_hooks,pavilion_id,user_group",
+    "id,name,location,is_active,max_hooks,user_group",
+    "id,name,location,is_active,user_group",
+    "id,name,location,is_active,max_hooks,pavilion_id",
+    "id,name,location,is_active,max_hooks",
+    "id,name,location,is_active",
+  ];
+  let lastError = null;
+  for (const sel of selects) {
+    let query = supa
+      .from("cabinets")
+      .select(sel)
+      .order("name", { ascending: true });
+    if (!includeInactive) query = query.eq("is_active", true);
+    const { data, error } = await query;
+    if (!error) {
+      return (data ?? []).map((c) => ({
+        ...c,
+        max_hooks: c?.max_hooks ?? null,
+        pavilion_id: c?.pavilion_id ?? null,
+        user_group: normalizeGroup(c?.user_group ?? "employe"),
+        allow_consultation: c?.allow_consultation !== false,
+        allow_self_borrow: c?.allow_self_borrow !== false,
+        allow_admin_lending: c?.allow_admin_lending === true,
+      }));
     }
-    const data = await res.json();
-    return data; // on laisse app.js décider quoi faire avec
-  } catch (e) {
-    console.warn('Erreur refreshLastCreated', e);
+    lastError = error;
   }
+  throw lastError ?? new Error("Impossible de charger les armoires.");
 }
 
-// Variante: rafraîchir par app_item_id dans Podio, si ton backend le gère
-export async function refreshLastCreatedFromPodio(appItemId) {
-  if (!appItemId) return null;
-  const url = `${CONFIG.LOOKUP_BASE}/by-app-item-id?app_item_id=${encodeURIComponent(appItemId)}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`lookup by-app-item-id error ${res.status}`);
-  return res.json();
-}
+export async function createCabinet(payload) {
+  const name = String(payload?.name ?? "").trim();
+  const location = payload?.location != null ? String(payload.location).trim() : null;
+  const maxHooksRaw = Number(payload?.max_hooks);
+  const pavilionRaw = payload?.pavilion_id;
+  const pavilion_id = pavilionRaw == null || String(pavilionRaw).trim() === ""
+    ? null
+    : Number(pavilionRaw);
+  const user_group = normalizeGroup(payload?.user_group ?? "employe");
+  const allow_consultation = payload?.allow_consultation !== false;
+  const allow_self_borrow = payload?.allow_self_borrow !== false;
+  const allow_admin_lending = payload?.allow_admin_lending === true;
+  const max_hooks = Number.isFinite(maxHooksRaw) && maxHooksRaw > 0 ? Math.trunc(maxHooksRaw) : null;
+  if (!name) throw new Error("Nom d'armoire requis.");
+  if (!max_hooks) throw new Error("Maximum de crochets invalide.");
+  if (pavilion_id != null && !Number.isFinite(pavilion_id)) throw new Error("Pavillon invalide.");
 
-// Variante: rafraîchir par inventaire
-export async function refreshLastCreatedByInventory(inv) {
-  if (!inv) return null;
-  const url = `${CONFIG.LOOKUP_BASE}/by-inventory?inventory=${encodeURIComponent(inv)}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`lookup by-inventory error ${res.status}`);
-  return res.json();
-}
+  let result = await supa
+    .from("cabinets")
+    .insert({
+      name,
+      location,
+        max_hooks,
+        pavilion_id,
+        user_group,
+        allow_consultation,
+        allow_self_borrow,
+        allow_admin_lending,
+        is_active: true,
+      })
+    .select("id,name,location,is_active,max_hooks,pavilion_id,user_group,allow_consultation,allow_self_borrow,allow_admin_lending")
+    .single();
 
-// Mock pour DEV local si CONFIG.USE_MOCK === true
-function mockApi(path, opts = {}) {
-  console.log('[MOCK API]', path, opts);
-
-  // à partir d’ici, tu colles ton code actuel de mockApi tel quel,
-  // en le laissant privé (pas de "export"), par exemple :
-  const _store = { items: [] };
-
-  function _latestByInv(inv) {
-    return _store.items
-      .filter(i => i.inventory === inv)
-      .sort((a, b) => b.createdAt - a.createdAt)[0] || null;
+  if (result.error && /user_group/i.test(String(result.error?.message ?? ""))) {
+    result = await supa
+      .from("cabinets")
+      .insert({
+        name,
+        location,
+        max_hooks,
+        pavilion_id,
+        is_active: true,
+      })
+      .select("id,name,location,is_active,max_hooks,pavilion_id")
+      .single();
   }
 
-  // ... [copie TON mock existant ici] ...
+  const { data, error } = result;
 
-  return Promise.resolve({ ok: true });
+  if (!error) {
+    const qr = await generateCabinetQr(data?.id);
+    safeAudit({
+      event_type: "cabinet_create",
+      action: "cabinet_create",
+      target: data?.name || `cabinet:${data?.id ?? "?"}`,
+      details: `cabinet_id=${data?.id ?? "?"}`,
+      status: "ok",
+      source: "frontend",
+    });
+    return {
+      ...data,
+      user_group: normalizeGroup(data?.user_group ?? user_group),
+      allow_consultation: data?.allow_consultation ?? allow_consultation,
+      allow_self_borrow: data?.allow_self_borrow ?? allow_self_borrow,
+      allow_admin_lending: data?.allow_admin_lending ?? allow_admin_lending,
+      qr_code: qr,
+    };
+  }
+
+  const viaFn = await callFunctionRaw("cabinets-create", {
+    name,
+    location,
+    max_hooks,
+    pavilion_id,
+    user_group,
+    allow_consultation,
+    allow_self_borrow,
+    allow_admin_lending,
+  });
+  const created = viaFn?.cabinet ?? viaFn;
+  const qr = viaFn?.qr_code ?? viaFn?.qr ?? await generateCabinetQr(created?.id);
+  safeAudit({
+    event_type: "cabinet_create",
+    action: "cabinet_create",
+    target: created?.name || `cabinet:${created?.id ?? "?"}`,
+    details: `cabinet_id=${created?.id ?? "?"}`,
+    status: "ok",
+    source: "frontend",
+  });
+  return {
+    ...created,
+    user_group: normalizeGroup(created?.user_group ?? user_group),
+    allow_consultation: created?.allow_consultation ?? allow_consultation,
+    allow_self_borrow: created?.allow_self_borrow ?? allow_self_borrow,
+    allow_admin_lending: created?.allow_admin_lending ?? allow_admin_lending,
+    qr_code: qr,
+  };
 }
+
+export async function generateCabinetQr(cabinetId) {
+  const id = Number(cabinetId);
+  if (!Number.isFinite(id) || id <= 0) throw new Error("cabinet_id invalide.");
+  return await callFunctionRaw("cabinet-qr-generate", {
+    cabinet_id: Math.trunc(id),
+  });
+}
+
+export async function listMyCabinetManagerIds() {
+  const payload = await callFunctionRaw("cabinet-managers", {
+    action: "list_mine",
+  });
+  return (payload?.cabinet_ids ?? [])
+    .map((id) => Number(id))
+    .filter(Number.isFinite)
+    .map((id) => Math.trunc(id));
+}
+
+export async function listMyCabinetManagerAssignments() {
+  const payload = await callFunctionRaw("cabinet-managers", {
+    action: "list_mine",
+  });
+  return {
+    cabinet_ids: (payload?.cabinet_ids ?? [])
+      .map((id) => Number(id))
+      .filter(Number.isFinite)
+      .map((id) => Math.trunc(id)),
+    cabinets: payload?.cabinets ?? [],
+  };
+}
+
+export async function listCabinetManagers(cabinetId) {
+  const id = Number(cabinetId);
+  if (!Number.isFinite(id) || id <= 0) throw new Error("cabinet_id invalide.");
+  const payload = await callFunctionRaw("cabinet-managers", {
+    action: "list_for_cabinet",
+    cabinet_id: Math.trunc(id),
+  });
+  return payload?.managers ?? [];
+}
+
+export async function listCabinetManagerCandidates(cabinetId) {
+  const id = Number(cabinetId);
+  if (!Number.isFinite(id) || id <= 0) throw new Error("cabinet_id invalide.");
+  const payload = await callFunctionRaw("cabinet-managers", {
+    action: "list_candidates",
+    cabinet_id: Math.trunc(id),
+  });
+  return payload?.users ?? [];
+}
+
+export async function addCabinetManager(cabinetId, userId) {
+  const id = Number(cabinetId);
+  const uid = String(userId ?? "").trim();
+  if (!Number.isFinite(id) || id <= 0) throw new Error("cabinet_id invalide.");
+  if (!uid) throw new Error("Utilisateur invalide.");
+  const payload = await callFunctionRaw("cabinet-managers", {
+    action: "add",
+    cabinet_id: Math.trunc(id),
+    user_id: uid,
+  });
+  return payload?.managers ?? [];
+}
+
+export async function removeCabinetManager(cabinetId, userId) {
+  const id = Number(cabinetId);
+  const uid = String(userId ?? "").trim();
+  if (!Number.isFinite(id) || id <= 0) throw new Error("cabinet_id invalide.");
+  if (!uid) throw new Error("Utilisateur invalide.");
+  const payload = await callFunctionRaw("cabinet-managers", {
+    action: "remove",
+    cabinet_id: Math.trunc(id),
+    user_id: uid,
+  });
+  return payload?.managers ?? [];
+}
+
+export async function updateCabinet(cabinetId, patch) {
+  const id = Number(cabinetId);
+  if (!Number.isFinite(id)) throw new Error("cabinet_id invalide.");
+
+  let beforeRow = null;
+  let beforeErr = null;
+  for (const selectClause of [
+    "id,name,location,is_active,max_hooks,pavilion_id,user_group,allow_consultation,allow_self_borrow,allow_admin_lending",
+    "id,name,location,is_active,max_hooks,pavilion_id,user_group",
+    "id,name,location,is_active,max_hooks,pavilion_id",
+    "id,name,location,is_active,max_hooks",
+  ]) {
+    const result = await supa
+      .from("cabinets")
+      .select(selectClause)
+      .eq("id", id)
+      .maybeSingle();
+    if (!result.error) {
+      beforeRow = result.data;
+      beforeErr = null;
+      break;
+    }
+    beforeErr = result.error;
+    if (!/user_group|pavilion_id/i.test(String(result.error?.message ?? ""))) break;
+  }
+  if (beforeErr) throw beforeErr;
+  if (!beforeRow) throw new Error("Armoire introuvable.");
+
+  const updates = {};
+  if (patch?.name != null) {
+    const name = String(patch.name).trim();
+    if (!name) throw new Error("Nom d'armoire requis.");
+    updates.name = name;
+  }
+  if (patch?.location !== undefined) {
+    const location = patch.location == null ? null : String(patch.location).trim();
+    updates.location = location || null;
+  }
+  if (patch?.is_active !== undefined) {
+    updates.is_active = !!patch.is_active;
+  }
+  if (patch?.max_hooks !== undefined) {
+    const max = Number(patch.max_hooks);
+    if (!Number.isFinite(max) || max <= 0) throw new Error("Maximum de crochets invalide.");
+    updates.max_hooks = Math.trunc(max);
+  }
+  if (patch?.pavilion_id !== undefined) {
+    if (patch.pavilion_id == null || String(patch.pavilion_id).trim() === "") {
+      updates.pavilion_id = null;
+    } else {
+      const pavilion = Number(patch.pavilion_id);
+      if (!Number.isFinite(pavilion)) throw new Error("Pavillon invalide.");
+      updates.pavilion_id = Math.trunc(pavilion);
+    }
+  }
+  if (patch?.user_group !== undefined) {
+    updates.user_group = normalizeGroup(patch.user_group);
+  }
+  if (patch?.allow_consultation !== undefined) {
+    updates.allow_consultation = !!patch.allow_consultation;
+  }
+  if (patch?.allow_self_borrow !== undefined) {
+    updates.allow_self_borrow = !!patch.allow_self_borrow;
+  }
+  if (patch?.allow_admin_lending !== undefined) {
+    updates.allow_admin_lending = !!patch.allow_admin_lending;
+  }
+
+  const changed = {};
+  for (const [k, v] of Object.entries(updates)) {
+    const prev = beforeRow[k];
+    if (prev !== v) changed[k] = v;
+  }
+  if (!Object.keys(changed).length) {
+    return {
+      ...beforeRow,
+      pavilion_id: beforeRow?.pavilion_id ?? null,
+      user_group: normalizeGroup(beforeRow?.user_group ?? "employe"),
+      allow_consultation: beforeRow?.allow_consultation !== false,
+      allow_self_borrow: beforeRow?.allow_self_borrow !== false,
+      allow_admin_lending: beforeRow?.allow_admin_lending === true,
+    };
+  }
+
+  let writeUpdates = { ...changed };
+  let result = await supa
+    .from("cabinets")
+    .update(writeUpdates)
+    .eq("id", id)
+    .select("id,name,location,is_active,max_hooks,pavilion_id,user_group,allow_consultation,allow_self_borrow,allow_admin_lending")
+    .single();
+
+  if (result.error && /pavilion_id/i.test(String(result.error.message ?? "")) && "pavilion_id" in writeUpdates) {
+    delete writeUpdates.pavilion_id;
+    result = await supa
+      .from("cabinets")
+      .update(writeUpdates)
+      .eq("id", id)
+      .select("id,name,location,is_active,max_hooks")
+      .single();
+  }
+
+  if (result.error && /user_group/i.test(String(result.error.message ?? "")) && "user_group" in writeUpdates) {
+    delete writeUpdates.user_group;
+    if (!Object.keys(writeUpdates).length) {
+      return {
+        ...beforeRow,
+        pavilion_id: beforeRow?.pavilion_id ?? null,
+        user_group: normalizeGroup(beforeRow?.user_group ?? "employe"),
+        allow_consultation: beforeRow?.allow_consultation !== false,
+        allow_self_borrow: beforeRow?.allow_self_borrow !== false,
+        allow_admin_lending: beforeRow?.allow_admin_lending === true,
+      };
+    }
+    result = await supa
+      .from("cabinets")
+      .update(writeUpdates)
+      .eq("id", id)
+      .select("id,name,location,is_active,max_hooks,pavilion_id")
+      .single();
+  }
+
+  if (
+    result.error
+    && /allow_consultation|allow_self_borrow|allow_admin_lending/i.test(String(result.error.message ?? ""))
+    && ("allow_consultation" in writeUpdates || "allow_self_borrow" in writeUpdates || "allow_admin_lending" in writeUpdates)
+  ) {
+    delete writeUpdates.allow_consultation;
+    delete writeUpdates.allow_self_borrow;
+    delete writeUpdates.allow_admin_lending;
+    if (!Object.keys(writeUpdates).length) {
+      return {
+        ...beforeRow,
+        pavilion_id: beforeRow?.pavilion_id ?? null,
+        user_group: normalizeGroup(beforeRow?.user_group ?? "employe"),
+        allow_consultation: beforeRow?.allow_consultation !== false,
+        allow_self_borrow: beforeRow?.allow_self_borrow !== false,
+        allow_admin_lending: beforeRow?.allow_admin_lending === true,
+      };
+    }
+    result = await supa
+      .from("cabinets")
+      .update(writeUpdates)
+      .eq("id", id)
+      .select("id,name,location,is_active,max_hooks,pavilion_id,user_group")
+      .single();
+  }
+
+  const { data, error } = result;
+
+  if (error) throw error;
+  safeAudit({
+    event_type: "cabinet_update",
+    action: "cabinet_update",
+    target: data?.name || `cabinet:${id}`,
+    details: Object.entries(changed).map(([k, v]) => `${k}: ${String(v ?? "null")}`).join("; "),
+    status: "ok",
+    source: "frontend",
+  });
+  return {
+    ...data,
+    pavilion_id: data?.pavilion_id ?? null,
+    user_group: normalizeGroup(data?.user_group ?? beforeRow?.user_group ?? "employe"),
+    allow_consultation: data?.allow_consultation ?? beforeRow?.allow_consultation ?? true,
+    allow_self_borrow: data?.allow_self_borrow ?? beforeRow?.allow_self_borrow ?? true,
+    allow_admin_lending: data?.allow_admin_lending ?? beforeRow?.allow_admin_lending ?? false,
+  };
+}
+
+export async function getCabinetUsage(cabinetId) {
+  const id = Number(cabinetId);
+  if (!Number.isFinite(id)) throw new Error("cabinet_id invalide.");
+  const [keysRes, keyringsRes] = await Promise.all([
+    supa.from("keys").select("id", { count: "exact", head: true }).eq("cabinet_id", id),
+    supa.from("keyrings").select("id", { count: "exact", head: true }).eq("cabinet_id", id),
+  ]);
+  if (keysRes.error) throw keysRes.error;
+  if (keyringsRes.error) throw keyringsRes.error;
+  return {
+    keys: keysRes.count ?? 0,
+    keyrings: keyringsRes.count ?? 0,
+  };
+}
+
+export async function deleteCabinet(cabinetId) {
+  const id = Number(cabinetId);
+  if (!Number.isFinite(id)) throw new Error("cabinet_id invalide.");
+  const { error } = await supa
+    .from("cabinets")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+  safeAudit({
+    event_type: "cabinet_delete",
+    action: "cabinet_delete",
+    target: `cabinet:${id}`,
+    details: "Suppression de l'armoire",
+    status: "ok",
+    source: "frontend",
+  });
+  return { ok: true, id };
+}
+
+export async function listPavilions() {
+  const { data, error } = await supa
+    .from("pavilions")
+    .select("id,code,nom,campus,actif")
+    .eq("actif", true)
+    .order("campus", { ascending: true, nullsFirst: true })
+    .order("code", { ascending: true, nullsFirst: true })
+    .order("nom", { ascending: true, nullsFirst: true });
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function listKeysByCabinet(cabinetId) {
+  const { data, error } = await supa
+    .from("keys")
+    .select("id,cabinet_id,hook_no,key_no,key_code,local,label,utilisation,remarque,pavillon,pavilion_id,departement,is_missing,updated_at,keyring_id")
+    .eq("cabinet_id", cabinetId)
+    .order("hook_no", { ascending: true });
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+
+export async function listKeyringsByCabinet(cabinetId) {
+  const { data, error } = await supa
+    .from("keyrings")
+    .select("id, cabinet_id, hook_no, ring_code, name, note")
+    .eq("cabinet_id", cabinetId)
+    .order("hook_no", { ascending: true })
+    .order("ring_code", { ascending: true });
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function listOpenLoansByKeyIds(keyIds) {
+  if (!keyIds.length) return [];
+  let data = null;
+  let error = null;
+  for (const selectClause of [
+    "id,key_id,borrower_id,borrower_name,loaned_at,returned_at,note",
+    "id,key_id,borrower_id,loaned_at,returned_at,note",
+  ]) {
+    const result = await supa
+      .from("loans")
+      .select(selectClause)
+      .in("key_id", keyIds)
+      .is("returned_at", null);
+    if (!result.error) {
+      data = result.data;
+      error = null;
+      break;
+    }
+    error = result.error;
+    if (!/borrower_name/i.test(String(result.error?.message ?? ""))) break;
+  }
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function listProfilesByIds(ids) {
+  if (!ids.length) return [];
+  let data = null;
+  let error = null;
+  for (const selectClause of ["id,display_name,role,user_group", "id,display_name,role"]) {
+    const result = await supa
+      .from("user_profiles")
+      .select(selectClause)
+      .in("id", ids);
+    if (!result.error) {
+      data = result.data;
+      error = null;
+      break;
+    }
+    error = result.error;
+    if (!/user_group/i.test(String(result.error?.message ?? ""))) break;
+  }
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    ...row,
+    user_group: normalizeGroup(row?.user_group ?? "employe"),
+  }));
+}
+
+export async function listUserProfiles() {
+  let data = null;
+  let error = null;
+  for (const selectClause of ["id,display_name,role,user_group", "id,display_name,role"]) {
+    const result = await supa
+      .from("user_profiles")
+      .select(selectClause)
+      .order("display_name", { ascending: true });
+    if (!result.error) {
+      data = result.data;
+      error = null;
+      break;
+    }
+    error = result.error;
+    if (!/user_group/i.test(String(result.error?.message ?? ""))) break;
+  }
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    ...row,
+    user_group: normalizeGroup(row?.user_group ?? "employe"),
+  }));
+}
+
+export async function countPendingUsers() {
+  const { count, error } = await supa
+    .from("user_profiles")
+    .select("id", { count: "exact", head: true })
+    .eq("role", "new_user");
+  if (error) throw error;
+  return Number(count) || 0;
+}
+
+export async function updateUserProfileAccess(userId, role, userGroup) {
+  let result = await supa
+    .from("user_profiles")
+    .update({ role, user_group: normalizeGroup(userGroup ?? "employe") })
+    .eq("id", userId)
+    .select("id,display_name,role,user_group")
+    .single();
+
+  if (result.error && /user_group/i.test(String(result.error?.message ?? ""))) {
+    result = await supa
+      .from("user_profiles")
+      .update({ role })
+      .eq("id", userId)
+      .select("id,display_name,role")
+      .single();
+  }
+
+  const { data, error } = result;
+  if (error) throw error;
+  safeAudit({
+    event_type: "role_update",
+    action: "role_update",
+    target: data?.display_name || String(userId),
+    details: `role -> ${role}; group -> ${normalizeGroup(data?.user_group ?? userGroup ?? "employe")}`,
+    status: "ok",
+    source: "frontend",
+  });
+  return {
+    ...data,
+    user_group: normalizeGroup(data?.user_group ?? userGroup ?? "employe"),
+  };
+}
+
+export async function listMissingByKeyIds(keyIds) {
+  if (!keyIds.length) return [];
+  const { data, error } = await supa
+    .from("keys_missing")
+    .select("key_id,reported_at,reported_by")
+    .in("key_id", keyIds)
+    .is("found_at", null);
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function listLoansAll() {
+  let data = null;
+  let error = null;
+  for (const selectClause of [
+    "id,key_id,borrower_id,borrower_name,loaned_at,returned_at,note",
+    "id,key_id,borrower_id,loaned_at,returned_at,note",
+  ]) {
+    const result = await supa
+      .from("loans")
+      .select(selectClause)
+      .order("loaned_at", { ascending: false });
+    if (!result.error) {
+      data = result.data;
+      error = null;
+      break;
+    }
+    error = result.error;
+    if (!/borrower_name/i.test(String(result.error?.message ?? ""))) break;
+  }
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function listLoansByBorrower(borrowerId) {
+  let data = null;
+  let error = null;
+  for (const selectClause of [
+    "id,key_id,borrower_id,borrower_name,loaned_at,returned_at,note",
+    "id,key_id,borrower_id,loaned_at,returned_at,note",
+  ]) {
+    const result = await supa
+      .from("loans")
+      .select(selectClause)
+      .eq("borrower_id", borrowerId)
+      .order("loaned_at", { ascending: false });
+    if (!result.error) {
+      data = result.data;
+      error = null;
+      break;
+    }
+    error = result.error;
+    if (!/borrower_name/i.test(String(result.error?.message ?? ""))) break;
+  }
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function listKeysByIds(ids) {
+  if (!ids.length) return [];
+  const { data, error } = await supa
+    .from("keys")
+    .select("id,cabinet_id,hook_no,key_no,local,label,utilisation,remarque,pavillon,pavilion_id,departement,is_missing,keyring_id")
+    .in("id", ids);
+  if (error) throw error;
+  return data ?? [];
+}
+
+
+/* -------------------- EDGES (clÃƒÂ©s) -------------------- */
+
+export async function fnLoanCreate(key_id, note = null) {
+  const out = await callFunctionRaw("loan-create", { key_id, note });
+  const ref = await getKeyRefById(key_id);
+  safeAudit({
+    event_type: "loan_create",
+    action: "loan_create",
+    target: ref ? formatKeyTarget(ref) : `key:?/?/${key_id}`,
+    details: "Emprunt",
+    status: "ok",
+    source: "frontend",
+  });
+  return out;
+}
+
+export async function fnLoanReturn(loan_id) {
+  const out = await callFunctionRaw("loan-return", { loan_id });
+  const loanRef = await getLoanRefById(loan_id);
+  const keyRef = loanRef?.key_id ? await getKeyRefById(loanRef.key_id) : null;
+  safeAudit({
+    event_type: "loan_return",
+    action: "loan_return",
+    target: keyRef ? formatKeyTarget(keyRef) : `loan:${loan_id}`,
+    details: "Retour",
+    status: "ok",
+    source: "frontend",
+  });
+  return out;
+}
+
+export async function fnLoanReturnByKey(key_id) {
+  const out = await callFunctionRaw("loan-return", { key_id });
+  const ref = await getKeyRefById(key_id);
+  safeAudit({
+    event_type: "loan_return",
+    action: "loan_return",
+    target: ref ? formatKeyTarget(ref) : `key:?/?/${key_id}`,
+    details: "Retour",
+    status: "ok",
+    source: "frontend",
+  });
+  return out;
+}
+
+export async function fnReportMissing(key_id) {
+  const out = await callFunctionRaw("key-report-missing", { key_id });
+  const ref = await getKeyRefById(key_id);
+  safeAudit({
+    event_type: "key_report_missing",
+    action: "key_report_missing",
+    target: ref ? formatKeyTarget(ref) : `key:?/?/${key_id}`,
+    details: "",
+    status: "ok",
+    source: "frontend",
+  });
+  return out;
+}
+
+export async function fnReportFound(key_id) {
+  const out = await callFunctionRaw("key-report-found", { key_id });
+  const ref = await getKeyRefById(key_id);
+  safeAudit({
+    event_type: "key_report_found",
+    action: "key_report_found",
+    target: ref ? formatKeyTarget(ref) : `key:?/?/${key_id}`,
+    details: "",
+    status: "ok",
+    source: "frontend",
+  });
+  return out;
+}
+
+
+/* -------------------- EDGES (trousseaux) -------------------- */
+
+export async function fnLoanCreateKeyring(cabinet_id, hook_no, ring_code, note = null) {
+  const out = await callFunctionRaw("loan-create-keyring", { cabinet_id, hook_no, ring_code, note });
+  safeAudit({
+    event_type: "loan_create",
+    action: "loan_create",
+    target: formatKeyringTarget({ cabinet_id, hook_no, ring_code }),
+    details: "Emprunt",
+    status: "ok",
+    source: "frontend",
+  });
+  return out;
+}
+
+export async function rpcAdminCreateLoan({ key_id, borrower_id = null, borrower_name = null, note = null }) {
+  const { data, error } = await supa.rpc("admin_create_loan", {
+    p_key_id: Number(key_id),
+    p_borrower_id: borrower_id || null,
+    p_borrower_name: borrower_name || null,
+    p_note: note || null,
+  });
+  if (error) throw error;
+  const ref = await getKeyRefById(key_id);
+  safeAudit({
+    event_type: "loan_create",
+    action: "loan_create",
+    target: ref ? formatKeyTarget(ref) : `key:?/?/${key_id}`,
+    details: "Prêt administrateur",
+    status: "ok",
+    source: "frontend",
+  });
+  return data;
+}
+
+export async function rpcAdminCreateKeyringLoan({ cabinet_id, hook_no, ring_code, borrower_id = null, borrower_name = null, note = null }) {
+  const { data, error } = await supa.rpc("admin_create_keyring_loan", {
+    p_cabinet_id: Number(cabinet_id),
+    p_hook_no: Number(hook_no),
+    p_ring_code: String(ring_code ?? "").toUpperCase(),
+    p_borrower_id: borrower_id || null,
+    p_borrower_name: borrower_name || null,
+    p_note: note || null,
+  });
+  if (error) throw error;
+  safeAudit({
+    event_type: "loan_create",
+    action: "loan_create",
+    target: formatKeyringTarget({ cabinet_id, hook_no, ring_code }),
+    details: "Prêt administrateur",
+    status: "ok",
+    source: "frontend",
+  });
+  return data;
+}
+
+export async function fnLoanReturnKeyring(cabinet_id, hook_no, ring_code) {
+  const out = await callFunctionRaw("loan-return-keyring", { cabinet_id, hook_no, ring_code });
+  safeAudit({
+    event_type: "loan_return",
+    action: "loan_return",
+    target: formatKeyringTarget({ cabinet_id, hook_no, ring_code }),
+    details: "Retour",
+    status: "ok",
+    source: "frontend",
+  });
+  return out;
+}
+
+export async function createKeySuggestion(payload) {
+  const { data, error } = await supa
+    .from("key_suggestions")
+    .insert(payload)
+    .select("id")
+    .single();
+  if (error) throw error;
+  const keyRef = payload?.key_id ? await getKeyRefById(payload.key_id) : null;
+  safeAudit({
+    event_type: "suggestion_create",
+    action: "suggestion_create",
+    target: keyRef
+      ? formatKeyTarget(keyRef)
+      : (payload?.hook_no ? formatHookTarget({ cabinet_id: payload?.cabinet_id, hook_no: payload?.hook_no }) : "general"),
+    details: payload?.message || "",
+    status: "ok",
+    source: "frontend",
+  });
+  return data;
+}
+
+export async function listKeySuggestions() {
+  const { data, error } = await supa
+    .from("key_suggestions")
+    .select("id,cabinet_id,hook_no,key_id,keyring_id,is_general,message,created_by,created_at,status,admin_note")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function countOpenSuggestions() {
+  const { count, error } = await supa
+    .from("key_suggestions")
+    .select("id", { count: "exact", head: true })
+    .in("status", ["open", "triaged"]);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+export async function countOpenLoansByBorrower(borrowerId) {
+  if (!borrowerId) return 0;
+  const { count, error } = await supa
+    .from("loans")
+    .select("id", { count: "exact", head: true })
+    .eq("borrower_id", borrowerId)
+    .is("returned_at", null);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+export async function updateKeySuggestion(id, patch) {
+  const { data, error } = await supa
+    .from("key_suggestions")
+    .update(patch)
+    .eq("id", id)
+    .select("id,status,admin_note")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function listKeyringsByIds(ids) {
+  if (!ids?.length) return [];
+  const { data, error } = await supa
+    .from("keyrings")
+    .select("id,cabinet_id,hook_no,ring_code,name")
+    .in("id", ids);
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function fnImportKeysCsv(cabinet_id, rows) {
+  const out = await callFunctionRaw("keys-import-csv", {
+    cabinet_id: Number(cabinet_id),
+    rows,
+  });
+  const first = rows?.[0] ?? {};
+  const firstHook = Number(first?.tag);
+  const target = Number.isFinite(firstHook)
+    ? formatHookTarget({ cabinet_id, hook_no: firstHook })
+    : `cabinet:${cabinet_id}`;
+  safeAudit({
+    event_type: "key_create",
+    action: "key_create",
+    target,
+    details: [
+      `rows=${rows?.length ?? 0}`,
+      `key_no=${first?.key_no ?? "-"}`,
+      `local=${first?.local ?? "-"}`,
+      `utilisation=${first?.utilisation ?? "-"}`,
+      `remarque=${first?.remarque ?? "-"}`,
+      `pavillon=${first?.pavillon ?? "-"}`,
+    ].join("; "),
+    status: "ok",
+    source: "frontend",
+  });
+  return out;
+}
+
+
+
+
