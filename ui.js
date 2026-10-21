@@ -55,7 +55,7 @@ export function renderHookCard({ hookNo, keyLines, keyrings, role }) {
     <div class="item clickable" data-hook-no="${hookNo}">
       <div class="item-header">
         <div>
-          <div class="title">Crochet #${hookNo}</div>
+          <div class="title">${hookNo === "equipment" ? "Appareils / équipements" : `Crochet #${hookNo}`}</div>
         </div>
       </div>
 

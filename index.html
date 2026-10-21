@@ -160,6 +160,12 @@
       <input id="cab_edit_location" class="input" />
     </label>
     <label class="field">
+      <div class="muted">Type d'armoire</div>
+      <select id="cab_edit_type" class="select">
+        <option value="keys">Clés</option><option value="equipment">Appareils / tests</option><option value="other">Autre</option>
+      </select>
+    </label>
+    <label class="field">
       <div class="muted">Maximum de crochets</div>
       <input id="cab_edit_max_hooks" class="input" type="number" min="1" step="1" />
     </label>
@@ -236,6 +242,12 @@
       <input id="cab_create_location" class="input" />
     </label>
     <label class="field">
+      <div class="muted">Type d'armoire</div>
+      <select id="cab_create_type" class="select">
+        <option value="keys">Clés</option><option value="equipment">Appareils / tests</option><option value="other">Autre</option>
+      </select>
+    </label>
+    <label class="field">
       <div class="muted">Maximum de crochets</div>
       <input id="cab_create_max_hooks" class="input" type="number" min="1" step="1" />
     </label>
@@ -307,8 +319,8 @@
 <section id="addKeysModal" class="modal" hidden aria-hidden="true">
   <div class="modal-head">
     <div>
-      <div class="title">Ajouter des clés</div>
-      <div class="muted">Import CSV ou ajout manuel</div>
+      <div class="title" id="addItemsTitle">Ajouter des clés</div>
+      <div class="muted" id="addItemsSubtitle">Import CSV ou ajout manuel</div>
     </div>
     <button id="btnCloseModal" class="btn secondary">Fermer</button>
   </div>
@@ -337,6 +349,17 @@
     <div id="hookContext" class="hook-context" style="display:none;"></div>
 
     <div class="form-manual">
+  <div id="equipmentFields" class="edit-grid" hidden>
+    <label class="field"><div class="muted">Numéro d'inventaire / SAV</div><div class="row" style="gap:8px;"><input id="m_inventory_number" class="input" /><button id="btnHectorAutofill" class="btn secondary" type="button">Autoremplir avec Hector Collector</button></div><div id="hectorAutofillStatus" class="muted" role="status"></div></label>
+    <label class="field"><div class="muted">Marque</div><input id="m_brand" class="input" /></label>
+    <label class="field"><div class="muted">Modèle</div><input id="m_model" class="input" /></label>
+    <label class="field"><div class="muted">Date d'achat</div><input id="m_purchase_date" class="input" type="date" /></label>
+    <label class="field"><div class="muted">Fin de garantie</div><input id="m_warranty_end_date" class="input" type="date" /></label>
+    <label class="field"><div class="muted">Description</div><input id="m_description" class="input" placeholder="Appareil de mesure réseau" /></label>
+    <label class="field"><div class="muted">Remarque</div><input id="m_equipment_remarque" class="input" placeholder="Ne fonctionne pas avec des signaux 1G" /></label>
+    <label class="field"><div class="muted">Accessoires du kit</div><input id="m_accessories" class="input" placeholder="Sangle, connecteur cat5E" /></label>
+    <label class="field"><div class="muted">Tags</div><input id="m_tags" class="input" placeholder="reseau, cat5e, stp" /></label>
+  </div>
   <!-- ligne 1: crochet / clé / pav / local / qty -->
   <div class="row compact">
     <div class="field">

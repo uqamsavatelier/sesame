@@ -143,7 +143,7 @@ async function callFunctionRaw(name, body) {
 export async function listCabinets(options = {}) {
   const includeInactive = !!options?.includeInactive;
   const selects = [
-    "id,name,location,is_active,max_hooks,pavilion_id,user_group,allow_consultation,allow_self_borrow,allow_admin_lending",
+    "id,name,location,is_active,max_hooks,cabinet_type,pavilion_id,user_group,allow_consultation,allow_self_borrow,allow_admin_lending",
     "id,name,location,is_active,max_hooks,user_group,allow_consultation,allow_self_borrow,allow_admin_lending",
     "id,name,location,is_active,user_group,allow_consultation,allow_self_borrow,allow_admin_lending",
     "id,name,location,is_active,max_hooks,pavilion_id,user_group",
@@ -165,6 +165,7 @@ export async function listCabinets(options = {}) {
       return (data ?? []).map((c) => ({
         ...c,
         max_hooks: c?.max_hooks ?? null,
+        cabinet_type: c?.cabinet_type ?? "keys",
         pavilion_id: c?.pavilion_id ?? null,
         user_group: normalizeGroup(c?.user_group ?? "employe"),
         allow_consultation: c?.allow_consultation !== false,
@@ -181,6 +182,8 @@ export async function createCabinet(payload) {
   const name = String(payload?.name ?? "").trim();
   const location = payload?.location != null ? String(payload.location).trim() : null;
   const maxHooksRaw = Number(payload?.max_hooks);
+  const cabinet_type = ["keys", "equipment", "other"].includes(String(payload?.cabinet_type ?? "keys"))
+    ? String(payload.cabinet_type ?? "keys") : "keys";
   const pavilionRaw = payload?.pavilion_id;
   const pavilion_id = pavilionRaw == null || String(pavilionRaw).trim() === ""
     ? null
@@ -189,9 +192,9 @@ export async function createCabinet(payload) {
   const allow_consultation = payload?.allow_consultation !== false;
   const allow_self_borrow = payload?.allow_self_borrow !== false;
   const allow_admin_lending = payload?.allow_admin_lending === true;
-  const max_hooks = Number.isFinite(maxHooksRaw) && maxHooksRaw > 0 ? Math.trunc(maxHooksRaw) : null;
+  const max_hooks = cabinet_type === "keys" && Number.isFinite(maxHooksRaw) && maxHooksRaw > 0 ? Math.trunc(maxHooksRaw) : null;
   if (!name) throw new Error("Nom d'armoire requis.");
-  if (!max_hooks) throw new Error("Maximum de crochets invalide.");
+  if (cabinet_type === "keys" && !max_hooks) throw new Error("Maximum de crochets invalide.");
   if (pavilion_id != null && !Number.isFinite(pavilion_id)) throw new Error("Pavillon invalide.");
 
   let result = await supa
@@ -200,6 +203,7 @@ export async function createCabinet(payload) {
       name,
       location,
         max_hooks,
+        cabinet_type,
         pavilion_id,
         user_group,
         allow_consultation,
@@ -207,7 +211,7 @@ export async function createCabinet(payload) {
         allow_admin_lending,
         is_active: true,
       })
-    .select("id,name,location,is_active,max_hooks,pavilion_id,user_group,allow_consultation,allow_self_borrow,allow_admin_lending")
+    .select("id,name,location,is_active,max_hooks,cabinet_type,pavilion_id,user_group,allow_consultation,allow_self_borrow,allow_admin_lending")
     .single();
 
   if (result.error && /user_group/i.test(String(result.error?.message ?? ""))) {
@@ -250,6 +254,7 @@ export async function createCabinet(payload) {
     name,
     location,
     max_hooks,
+    cabinet_type,
     pavilion_id,
     user_group,
     allow_consultation,
@@ -399,6 +404,12 @@ export async function updateCabinet(cabinetId, patch) {
     if (!Number.isFinite(max) || max <= 0) throw new Error("Maximum de crochets invalide.");
     updates.max_hooks = Math.trunc(max);
   }
+  if (patch?.cabinet_type !== undefined) {
+    const cabinetType = String(patch.cabinet_type ?? "keys");
+    if (!["keys", "equipment", "other"].includes(cabinetType)) throw new Error("Type d'armoire invalide.");
+    updates.cabinet_type = cabinetType;
+    if (cabinetType !== "keys") updates.max_hooks = null;
+  }
   if (patch?.pavilion_id !== undefined) {
     if (patch.pavilion_id == null || String(patch.pavilion_id).trim() === "") {
       updates.pavilion_id = null;
@@ -442,7 +453,7 @@ export async function updateCabinet(cabinetId, patch) {
     .from("cabinets")
     .update(writeUpdates)
     .eq("id", id)
-    .select("id,name,location,is_active,max_hooks,pavilion_id,user_group,allow_consultation,allow_self_borrow,allow_admin_lending")
+    .select("id,name,location,is_active,max_hooks,cabinet_type,pavilion_id,user_group,allow_consultation,allow_self_borrow,allow_admin_lending")
     .single();
 
   if (result.error && /pavilion_id/i.test(String(result.error.message ?? "")) && "pavilion_id" in writeUpdates) {
@@ -519,6 +530,7 @@ export async function updateCabinet(cabinetId, patch) {
     allow_consultation: data?.allow_consultation ?? beforeRow?.allow_consultation ?? true,
     allow_self_borrow: data?.allow_self_borrow ?? beforeRow?.allow_self_borrow ?? true,
     allow_admin_lending: data?.allow_admin_lending ?? beforeRow?.allow_admin_lending ?? false,
+    cabinet_type: data?.cabinet_type ?? beforeRow?.cabinet_type ?? "keys",
   };
 }
 
@@ -572,9 +584,9 @@ export async function listPavilions() {
 export async function listKeysByCabinet(cabinetId) {
   const { data, error } = await supa
     .from("keys")
-    .select("id,cabinet_id,hook_no,key_no,key_code,local,label,utilisation,remarque,tags,pavillon,pavilion_id,departement,is_missing,updated_at,keyring_id")
+    .select("id,cabinet_id,hook_no,key_no,key_code,local,label,utilisation,remarque,tags,pavillon,pavilion_id,departement,is_missing,updated_at,keyring_id,inventory_number,brand,model,purchase_date,warranty_end_date,description,accessories")
     .eq("cabinet_id", cabinetId)
-    .order("hook_no", { ascending: true });
+    .order("hook_no", { ascending: true, nullsFirst: true });
 
   if (error) throw error;
   return data ?? [];
@@ -769,7 +781,7 @@ export async function listKeysByIds(ids) {
   if (!ids.length) return [];
   const { data, error } = await supa
     .from("keys")
-    .select("id,cabinet_id,hook_no,key_no,local,label,utilisation,remarque,tags,pavillon,pavilion_id,departement,is_missing,keyring_id")
+    .select("id,cabinet_id,hook_no,key_no,local,label,utilisation,remarque,tags,pavillon,pavilion_id,departement,is_missing,keyring_id,inventory_number,brand,model,purchase_date,warranty_end_date,description,accessories")
     .in("id", ids);
   if (error) throw error;
   return data ?? [];
@@ -1016,6 +1028,38 @@ export async function fnImportKeysCsv(cabinet_id, rows) {
     source: "frontend",
   });
   return out;
+}
+
+// Recherche Hector par assetTag. Les identifiants Hector restent dans l'Edge Function Hector.
+const HECTOR_LOOKUP_API = "https://mimjugutzdolfkfpchzc.functions.supabase.co/hector-lookup";
+
+export async function lookupHectorInventory(inventory) {
+  const assetTag = String(inventory ?? "").trim();
+  if (!assetTag) throw new Error("Numéro d'inventaire requis.");
+  const url = new URL(HECTOR_LOOKUP_API);
+  url.searchParams.set("resource", "assets");
+  url.searchParams.set("assetTag", assetTag);
+  url.searchParams.set("page", "1");
+  url.searchParams.set("pageSize", "1");
+  const response = await fetch(url, { method: "GET" });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error || `Hector Collector: HTTP ${response.status}`);
+  const item = payload?.items?.[0] ?? null;
+  if (!item) return null;
+
+  let part = null;
+  const partId = item.partId ?? item.articleId ?? item.productId ?? null;
+  if (partId) {
+    const partUrl = new URL(HECTOR_LOOKUP_API);
+    partUrl.searchParams.set("resource", "parts");
+    partUrl.searchParams.set("id", String(partId));
+    partUrl.searchParams.set("page", "1");
+    partUrl.searchParams.set("pageSize", "1");
+    const partResponse = await fetch(partUrl, { method: "GET" });
+    const partPayload = await partResponse.json().catch(() => null);
+    if (partResponse.ok) part = partPayload?.items?.[0] ?? partPayload ?? null;
+  }
+  return { assetTag, item, part };
 }
 
 

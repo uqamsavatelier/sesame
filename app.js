@@ -35,7 +35,8 @@ import {
   listLoansByBorrower,
   rpcAdminCreateLoan,
   rpcAdminCreateKeyringLoan,
-} from "./api.js?v=20260421e";
+  lookupHectorInventory,
+} from "./api.js?v=20261021h";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks, logAuditEvent } from "./audit.js";
 
 
@@ -1907,7 +1908,8 @@ function renderCabinetGrid() {
     const metaParts = [];
     if (c.is_active === false) metaParts.push("Hors fonction");
     if (c.location) metaParts.push(c.location);
-    if (Number.isFinite(Number(c.max_hooks)) && Number(c.max_hooks) > 0) {
+    if (c.cabinet_type === "equipment") metaParts.push("Appareils / tests");
+    else if (Number.isFinite(Number(c.max_hooks)) && Number(c.max_hooks) > 0) {
       metaParts.push(`max ${Math.trunc(Number(c.max_hooks))} crochets`);
     }
     metaParts.push(`Groupe ${groupLabel(c.user_group)}`);
@@ -2111,6 +2113,7 @@ async function openCabinetEditModal(cabinetId) {
   state.cabinetEditModal.managersLoading = true;
   $("cab_edit_name").value = String(cab.name ?? "");
   $("cab_edit_location").value = String(cab.location ?? "");
+  $("cab_edit_type").value = cab.cabinet_type ?? "keys";
   $("cab_edit_max_hooks").value = Number.isFinite(Number(cab.max_hooks)) && Number(cab.max_hooks) > 0
     ? String(Math.trunc(Number(cab.max_hooks)))
     : "";
@@ -2152,6 +2155,7 @@ function openCabinetCreateModal() {
   state.cabinetCreateModal.open = true;
   $("cab_create_name").value = "";
   $("cab_create_location").value = "";
+  $("cab_create_type").value = "keys";
   $("cab_create_max_hooks").value = "";
   $("cab_create_pavilion_id").innerHTML = buildPavilionOptionsHtml(null);
   syncCabinetGroupInputs(getCurrentUserGroup());
@@ -3128,6 +3132,46 @@ function renderEditModal(keyId) {
   $("edit_keyring").value = currentRingId ? String(currentRingId) : "";
 }
 
+function isEquipmentCabinet() {
+  return state.cabinets.find((c) => Number(c.id) === Number(state.cabinetId))?.cabinet_type === "equipment";
+}
+
+function syncAddItemsForm() {
+  const equipment = isEquipmentCabinet();
+  $("addItemsTitle").textContent = equipment ? "Ajouter un appareil" : "Ajouter des clés";
+  $("addItemsSubtitle").textContent = equipment ? "Fiche d'appareil et informations Hector Collector" : "Import CSV ou ajout manuel";
+  $("equipmentFields").hidden = !equipment;
+  ["m_hook", "m_keyno", "m_pavilion_id", "m_local", "m_qty", "m_utilisation", "m_is_keyring"].forEach((id) => {
+    const el = $(id);
+    if (el) el.closest(".field, .checkline")?.toggleAttribute("hidden", equipment);
+  });
+}
+
+function firstHectorValue(...values) {
+  return values.find((value) => value !== undefined && value !== null && String(value).trim() !== "") ?? "";
+}
+
+function hectorDateValue(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  const iso = text.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (iso) return iso[1];
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 10);
+}
+
+function fillEquipmentFromHector(result) {
+  const item = result?.item ?? {};
+  const part = result?.part ?? {};
+  const set = (id, value) => { if ($(id) && value !== "") $(id).value = String(value); };
+  set("m_inventory_number", result?.assetTag);
+  set("m_brand", firstHectorValue(part.maker, part.brand, item.maker, item.brand));
+  set("m_model", firstHectorValue(part.model, item.model));
+  set("m_purchase_date", hectorDateValue(firstHectorValue(item.purchaseDate, item.acquiredDate, item.dateAcquisition)));
+  set("m_warranty_end_date", hectorDateValue(firstHectorValue(item.warrantyEnd, item.warrantyEndDate)));
+  set("m_description", firstHectorValue(part.description, item.description, item.title, item.name));
+}
+
 function openEditModal(keyId) {
   const wasOpen = state.editModal.open;
   state.editModal.open = true;
@@ -3496,6 +3540,31 @@ function render() {
     return;
   }
 
+  if (isEquipmentCabinet()) {
+    const q = normalizeText(state.q);
+    const items = state.keys.filter((item) => normalizeText([
+      item.inventory_number, item.brand, item.model, item.description,
+      item.accessories, parseKeyTags(item.tags).join(" "), item.remarque,
+    ].join(" ")).includes(q));
+    const lines = items.map((item) => ({
+      key_id: item.id,
+      text: item.inventory_number || `Appareil ${item.id}`,
+      details: [
+        [item.brand, item.model].filter(Boolean).join(" "),
+        item.description,
+        item.accessories ? `Accessoires: ${item.accessories}` : "",
+        item.purchase_date || item.warranty_end_date ? `Achat: ${item.purchase_date || "—"} • Garantie: ${item.warranty_end_date || "—"}` : "",
+        parseKeyTags(item.tags).length ? `Tags: ${parseKeyTags(item.tags).join(", ")}` : "",
+      ].filter(Boolean),
+      state: state.loansByKey?.has(item.id) ? "onloan" : "ok",
+    }));
+    renderPager(1, items.length);
+    $("pageInfo").textContent = `${items.length} appareil${items.length > 1 ? "s" : ""}`;
+    $("list").innerHTML = renderHookCard({ hookNo: "equipment", keyLines: lines, keyrings: [], role: state.role });
+    maybeOpenQrLoanPrompt();
+    return;
+  }
+
   const grouped = groupByHook(state.keys);
   const ringsByHook = buildKeyringsByHook();
 
@@ -3652,6 +3721,7 @@ async function boot() {
     $("modalOverlay").hidden = false;
     $("addKeysModal").hidden = false;
     $("addKeysModal").setAttribute("aria-hidden", "false");
+    syncAddItemsForm();
     openTrackedModal("addKeys", wasOpen);
   }
   function closeModal(options = {}) {
@@ -3750,6 +3820,7 @@ renderHookExistingDetails(Number($("m_hook").value));
     const location = $("cab_create_location").value.trim();
     const maxRaw = $("cab_create_max_hooks").value.trim();
     const maxHooks = Number(maxRaw);
+    const cabinetType = $("cab_create_type").value || "keys";
     const pavilionIdRaw = $("cab_create_pavilion_id").value.trim();
     const pavilionId = pavilionIdRaw ? Number(pavilionIdRaw) : null;
     const userGroup = isSuperAdminRole(state.role)
@@ -3769,7 +3840,7 @@ renderHookExistingDetails(Number($("m_hook").value));
       $("cabCreateStatus").textContent = "Nom d'armoire requis.";
       return;
     }
-    if (!Number.isFinite(maxHooks) || maxHooks <= 0) {
+    if (cabinetType === "keys" && (!Number.isFinite(maxHooks) || maxHooks <= 0)) {
       $("cabCreateStatus").textContent = "Maximum de crochets invalide.";
       return;
     }
@@ -3785,6 +3856,7 @@ renderHookExistingDetails(Number($("m_hook").value));
         name,
         location: location || null,
         max_hooks: Math.trunc(maxHooks),
+        cabinet_type: cabinetType,
         pavilion_id: pavilionId,
         user_group: userGroup,
         allow_consultation: allowConsultation,
@@ -3855,6 +3927,7 @@ renderHookExistingDetails(Number($("m_hook").value));
     const pavilionId = pavilionIdRaw ? Number(pavilionIdRaw) : null;
     const maxRaw = $("cab_edit_max_hooks").value.trim();
     const maxHooks = Number(maxRaw);
+    const cabinetType = $("cab_edit_type").value || "keys";
     const userGroup = isSuperAdminRole(state.role)
       ? normalizeGroup($("cab_edit_user_group").value)
       : getCurrentUserGroup();
@@ -3872,7 +3945,7 @@ renderHookExistingDetails(Number($("m_hook").value));
       $("cabEditStatus").textContent = "Nom d'armoire requis.";
       return;
     }
-    if (!Number.isFinite(maxHooks) || maxHooks <= 0) {
+    if (cabinetType === "keys" && (!Number.isFinite(maxHooks) || maxHooks <= 0)) {
       $("cabEditStatus").textContent = "Maximum de crochets invalide.";
       return;
     }
@@ -3888,7 +3961,8 @@ renderHookExistingDetails(Number($("m_hook").value));
         name,
         location: location || null,
         is_active: isActive,
-        max_hooks: Math.trunc(maxHooks),
+        max_hooks: cabinetType === "keys" ? Math.trunc(maxHooks) : null,
+        cabinet_type: cabinetType,
         pavilion_id: pavilionId,
         user_group: userGroup,
         allow_consultation: allowConsultation,
@@ -4198,10 +4272,62 @@ $("m_is_keyring").addEventListener("change", (e) => {
   $("btnAddKeyringRow").addEventListener("click", () => {
   $("keyringRows").appendChild(mkKeyringRow($("m_pavilion_id").value, $("m_local").value));
 });
+  $("btnHectorAutofill")?.addEventListener("click", async () => {
+    const status = $("hectorAutofillStatus");
+    const inventory = $("m_inventory_number")?.value.trim();
+    if (!inventory) {
+      if (status) status.textContent = "Saisis d'abord un numéro d'inventaire.";
+      return;
+    }
+    const button = $("btnHectorAutofill");
+    try {
+      button.disabled = true;
+      if (status) status.textContent = "Recherche dans Hector Collector…";
+      const result = await lookupHectorInventory(inventory);
+      if (!result) {
+        if (status) status.textContent = "Aucun appareil trouvé pour ce numéro.";
+        return;
+      }
+      fillEquipmentFromHector(result);
+      if (status) status.textContent = "Informations récupérées. Vérifie-les avant d'enregistrer.";
+    } catch (error) {
+      if (status) status.textContent = `Erreur Hector : ${error?.message ?? error}`;
+    } finally {
+      button.disabled = false;
+    }
+  });
+
   $("btnManualSubmit").addEventListener("click", async () => {
   try {
     $("btnManualSubmit").disabled = true;
     setManualStatus("Ajout en cours...");
+
+    if (isEquipmentCabinet()) {
+      const inventory_number = $("m_inventory_number").value.trim();
+      if (!inventory_number) throw new Error("Le numéro d'inventaire / SAV est requis.");
+      const tags = $("m_tags").value.split(",").map((tag) => tag.trim()).filter(Boolean);
+      const { error } = await supa.from("keys").insert({
+        key_code: crypto.randomUUID(),
+        cabinet_id: Number(state.cabinetId),
+        hook_no: null,
+        key_no: inventory_number,
+        inventory_number,
+        brand: $("m_brand").value.trim() || null,
+        model: $("m_model").value.trim() || null,
+        purchase_date: $("m_purchase_date").value || null,
+        warranty_end_date: $("m_warranty_end_date").value || null,
+        description: $("m_description").value.trim() || null,
+        accessories: $("m_accessories").value.trim() || null,
+        remarque: $("m_equipment_remarque").value.trim() || null,
+        tags,
+      });
+      if (error) throw error;
+      setManualStatus("Appareil ajouté", 5000);
+      await loadDataForCabinet();
+      render();
+      ["m_inventory_number", "m_brand", "m_model", "m_purchase_date", "m_warranty_end_date", "m_description", "m_equipment_remarque", "m_accessories", "m_tags", "m_remarque"].forEach((id) => { if ($(id)) $(id).value = ""; });
+      return;
+    }
 
     const hook = assertHookWithinCabinetLimit($("m_hook").value.trim());
 
