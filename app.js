@@ -1342,6 +1342,25 @@ function highlightText(value, query) {
   return `${before}<mark class="hl">${mid}</mark>${after}`;
 }
 
+function parseKeyTags(value) {
+  const values = Array.isArray(value) ? value : String(value ?? "").split(/[,;\n]/);
+  const seen = new Set();
+  return values.map(tag => String(tag).trim()).filter(tag => {
+    const normalized = normalizeText(tag);
+    if (!normalized || seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
+}
+
+function buildTagSearchDetails(k, query) {
+  const q = normalizeText(query).trim();
+  if (!q) return [];
+  return parseKeyTags(k.tags)
+    .filter(tag => normalizeText(tag).includes(q))
+    .map(tag => `<span class="key-tag"><svg class="tag-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3 3h8l10 10-8 8L3 11Z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg><span class="sr-only">Tag : </span>${highlightText(tag, q)}</span>`);
+}
+
 function buildSearchDetailsForKey(k, query) {
   const q = normalizeText(query);
   if (!q) return [];
@@ -1360,7 +1379,7 @@ function buildSearchDetailsForKey(k, query) {
       details.push(`${f.label}: ${highlightText(val, query)}`);
     }
   }
-  return details;
+  return details.concat(buildTagSearchDetails(k, query));
 }
 
 function buildKeyTicketLines(k, query = "") {
@@ -1387,6 +1406,7 @@ function buildKeyTicketLines(k, query = "") {
   if (utilisation) line2Parts.push(`Utilisation: ${utilisation}`);
   const remarque = formatPart(k.remarque);
   if (remarque) line2Parts.push(`Remarque: ${remarque}`);
+  line2Parts.push(...buildTagSearchDetails(k, query));
 
   return {
     line1,
@@ -1435,6 +1455,7 @@ function matchesKeySearch(key, query) {
     key?.departement,
     key?.utilisation,
     key?.remarque,
+    parseKeyTags(key?.tags).join(" "),
     getPavilionDisplayForKey(key),
     getKeyringLabelForKey(key),
   ]
@@ -1594,6 +1615,7 @@ function getFavoriteEntries() {
           key?.local,
           key?.utilisation,
           key?.remarque,
+          parseKeyTags(key?.tags).join(" "),
           getPavilionDisplayForKey(key),
         ].join(" ")),
       ]
@@ -1644,6 +1666,8 @@ function renderFavorites() {
         formatFavoriteBorrowCount(entry.count),
         entry.lastLoanedAt ? `dernier le ${escapeHtml(formatDateFr(entry.lastLoanedAt))}` : "",
       ].filter(Boolean).join(" - ");
+      const tagDetails = (isRing ? ringKeys : [entry.key])
+        .flatMap(key => buildTagSearchDetails(key, state.q));
       return `
         <div class="item clickable" data-hook-no="${Number.isFinite(hookNo) ? hookNo : 0}">
           <div class="item-header">
@@ -1651,6 +1675,7 @@ function renderFavorites() {
               <div class="title">${title}</div>
               ${ringKeysLine ? `<div class="kdetail" style="padding-left:0; margin-top:8px;">${ringKeysLine}</div>` : ""}
               <div class="sub">${favoriteMeta}</div>
+              ${tagDetails.length ? `<div class="kdetail">${[...new Set(tagDetails)].join(" • ")}</div>` : ""}
             </div>
             <span class="${statusClass}">${statusLabel}</span>
           </div>
@@ -2167,7 +2192,7 @@ function filterHook(hookNo, keysForHook, keyringsForHook, q) {
   if (normalizeText(hookNo).includes(s)) return true;
 
   for (const k of keysForHook) {
-    const t = normalizeText(`${k.local ?? ""} ${k.key_no ?? ""} ${k.remarque ?? ""} ${k.utilisation ?? ""} ${getPavilionDisplayForKey(k)} ${k.departement ?? ""} ${k.hook_no ?? ""}`);
+    const t = normalizeText(`${k.local ?? ""} ${k.key_no ?? ""} ${k.remarque ?? ""} ${k.utilisation ?? ""} ${getPavilionDisplayForKey(k)} ${k.departement ?? ""} ${k.hook_no ?? ""} ${parseKeyTags(k.tags).join(" ")}`);
     if (t.includes(s)) return true;
   }
   for (const kr of keyringsForHook) {
@@ -2986,6 +3011,7 @@ function renderEditModal(keyId) {
   $("edit_local").value = key.local ?? "";
   $("edit_utilisation").value = key.utilisation ?? "";
   $("edit_remarque").value = key.remarque ?? "";
+  $("edit_tags").value = parseKeyTags(key.tags).join(", ");
   $("edit_quantite").value = key.quantite ?? "1";
   const inferredPavilionId = resolvePavilionIdFromText(key.pavillon);
   $("edit_pavilion_id").innerHTML = buildPavilionOptionsHtml(key.pavilion_id ?? inferredPavilionId ?? null);
@@ -4429,6 +4455,7 @@ $("m_is_keyring").addEventListener("change", (e) => {
     const pavillon = getPavilionLegacyTextById(pavilionId);
     const utilisation = $("edit_utilisation").value.trim();
     const remarque = $("edit_remarque").value.trim();
+    const tags = parseKeyTags($("edit_tags").value);
     const quantiteRaw = $("edit_quantite").value.trim();
     const quantiteNum = Number(quantiteRaw || "1");
     if (!Number.isFinite(quantiteNum) || quantiteNum <= 0 || !Number.isInteger(quantiteNum)) {
@@ -4449,7 +4476,7 @@ $("m_is_keyring").addEventListener("change", (e) => {
       if (!okQty) return;
     }
 
-    const payload = { key_no: keyNo, local, pavillon, pavilion_id: pavilionId, utilisation, remarque };
+    const payload = { key_no: keyNo, local, pavillon, pavilion_id: pavilionId, utilisation, remarque, tags };
     if (hookNo != null) payload.hook_no = hookNo;
     if (changedHook) payload.keyring_id = null;
 
@@ -4483,6 +4510,9 @@ $("m_is_keyring").addEventListener("change", (e) => {
         pavilion_id: pavilionId,
       };
       const detailParts = [];
+      if (JSON.stringify(parseKeyTags(key?.tags)) !== JSON.stringify(tags)) {
+        detailParts.push(`tags: ${tags.join(", ") || "-"}`);
+      }
       if ((key?.local ?? "") !== local) detailParts.push(`local: ${local || "-"}`);
       if ((key?.utilisation ?? "") !== utilisation) detailParts.push(`utilisation: ${utilisation || "-"}`);
       if ((key?.remarque ?? "") !== remarque) detailParts.push(`remarque: ${remarque || "-"}`);
@@ -4510,6 +4540,7 @@ $("m_is_keyring").addEventListener("change", (e) => {
           departement: key?.departement ?? "",
           quantite: String(quantiteNum - 1),
           remarque,
+          tags,
         }]);
       }
 

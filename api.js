@@ -572,7 +572,7 @@ export async function listPavilions() {
 export async function listKeysByCabinet(cabinetId) {
   const { data, error } = await supa
     .from("keys")
-    .select("id,cabinet_id,hook_no,key_no,key_code,local,label,utilisation,remarque,pavillon,pavilion_id,departement,is_missing,updated_at,keyring_id")
+    .select("id,cabinet_id,hook_no,key_no,key_code,local,label,utilisation,remarque,tags,pavillon,pavilion_id,departement,is_missing,updated_at,keyring_id")
     .eq("cabinet_id", cabinetId)
     .order("hook_no", { ascending: true });
 
@@ -769,7 +769,7 @@ export async function listKeysByIds(ids) {
   if (!ids.length) return [];
   const { data, error } = await supa
     .from("keys")
-    .select("id,cabinet_id,hook_no,key_no,local,label,utilisation,remarque,pavillon,pavilion_id,departement,is_missing,keyring_id")
+    .select("id,cabinet_id,hook_no,key_no,local,label,utilisation,remarque,tags,pavillon,pavilion_id,departement,is_missing,keyring_id")
     .in("id", ids);
   if (error) throw error;
   return data ?? [];
