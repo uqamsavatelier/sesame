@@ -1347,6 +1347,7 @@ function buildSearchDetailsForKey(k, query) {
   if (!q) return [];
   const details = [];
   const fields = [
+    { label: "Pavillon", value: getPavilionDisplayForKey(k) },
     { label: "Local", value: k.local },
     { label: "Département", value: k.departement },
     { label: "Utilisation", value: k.utilisation },
