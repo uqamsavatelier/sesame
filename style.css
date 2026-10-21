@@ -384,6 +384,31 @@ mark.hl{
   flex-shrink:0;
 }
 
+.tag-editor{
+  flex:0 0 100%;
+  margin-bottom:12px;
+}
+.tag-current{
+  margin-top:10px;
+  overflow-wrap:anywhere;
+}
+.tags-dialog{
+  width:min(440px, calc(100vw - 32px));
+  box-sizing:border-box;
+  max-height:80vh;
+  overflow:auto;
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:20px;
+  color:var(--text);
+  background:var(--panel, #fff);
+}
+.tags-dialog::backdrop{ background:rgba(0,0,0,.45); }
+.tags-dialog .tag-close{ margin-left:auto; }
+.tag-add-form{ display:flex; align-items:end; gap:8px; }
+.tag-add-form label{ flex:1; min-width:0; }
+.tag-add-form .input{ width:100%; box-sizing:border-box; margin-top:6px; }
+
 .key-tag{
   display:inline-flex;
   align-items:center;

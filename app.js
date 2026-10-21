@@ -1353,6 +1353,97 @@ function parseKeyTags(value) {
   });
 }
 
+function tagIcon() {
+  return '<svg class="tag-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3 3h8l10 10-8 8L3 11Z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>';
+}
+
+function renderTagEditor(id, entity) {
+  const host = $(id);
+  host._tags = parseKeyTags(entity.tags);
+  host.innerHTML = `<div class="row">${tagIcon()} <strong>Tags</strong> <button type="button" class="btn secondary">Ajouter</button></div><div class="tag-current"></div>`;
+  const update = () => {
+    host.querySelector('.tag-current').textContent = `Tags actuels : ${host._tags.join(', ') || 'Aucun tag'}`;
+  };
+  update();
+  host.querySelector('button').onclick = () => openTagDialog(null, null, host._tags, tags => {
+    host._tags = tags;
+    update();
+  });
+}
+
+async function saveAddedTags(kind, entity, tags) {
+  for (const tag of tags) {
+    if (parseKeyTags(entity?.tags).some(t => normalizeText(t) === normalizeText(tag))) continue;
+    const { data, error } = await supa.rpc('add_search_tag', { p_kind: kind, p_id: entity.id, p_tag: tag });
+    if (error) throw error;
+    entity.tags = parseKeyTags(data);
+  }
+}
+
+function openTagDialog(kind, id, draftTags = null, onChange = null) {
+  const entity = kind === 'key' ? state.keys.find(k => k.id === id)
+    : kind === 'keyring' ? state.keyrings.find(k => k.id === id) : null;
+  if (kind && !entity) return;
+  let tags = parseKeyTags(draftTags ?? entity?.tags);
+  const dialog = document.createElement('dialog');
+  dialog.className = 'tags-dialog';
+  dialog.setAttribute('aria-label', 'Ajouter un tag');
+  dialog.innerHTML = `<div class="row">${tagIcon()} <strong>Tags</strong><button type="button" class="btn secondary tag-close">Fermer</button></div>
+    <p class="muted tag-target"></p>
+    <form class="tag-add-form"><label>Ajouter un tag<input class="input" name="tag" maxlength="80" required placeholder="Ex. Archambault" autocomplete="off" /></label><button class="btn" type="submit">Ajouter</button></form>
+    <p class="tag-current"></p><p class="muted tag-status" role="status"></p>`;
+  dialog.querySelector('.tag-target').textContent = entity
+    ? (kind === 'key' ? `Clé ${formatKeyTag(entity)}` : `Trousseau ${entity.ring_code ?? ''}${entity.name ? ' — ' + entity.name : ''}`)
+    : 'Les tags seront enregistrés avec les modifications.';
+  const update = () => { dialog.querySelector('.tag-current').textContent = `Tags actuels : ${tags.join(', ') || 'Aucun tag'}`; };
+  update();
+  let busy = false;
+  dialog.querySelector('.tag-close').onclick = () => { if (!busy) dialog.close(); };
+  dialog.addEventListener('cancel', event => { if (busy) event.preventDefault(); });
+  dialog.addEventListener('close', () => dialog.remove());
+  dialog.querySelector('form').onsubmit = async event => {
+    event.preventDefault();
+    if (busy) return;
+    const input = dialog.querySelector('input');
+    const tag = input.value.trim();
+    const status = dialog.querySelector('.tag-status');
+    if (!tag) return;
+    if (/[,;\n]/.test(tag)) { status.textContent = 'Ajoutez un seul tag à la fois, sans virgule ni point-virgule.'; return; }
+    if (tags.some(t => normalizeText(t) === normalizeText(tag))) { status.textContent = 'Ce tag existe déjà.'; return; }
+    if (tags.length >= 50) { status.textContent = 'Maximum de 50 tags.'; return; }
+    busy = true;
+    const button = dialog.querySelector('[type="submit"]');
+    button.disabled = true;
+    try {
+      if (kind) {
+        const { data, error } = await supa.rpc('add_search_tag', { p_kind: kind, p_id: id, p_tag: tag });
+        if (error) throw error;
+        tags = parseKeyTags(data);
+        entity.tags = tags;
+      } else {
+        tags = parseKeyTags([...tags, tag]);
+        onChange(tags);
+      }
+      update();
+      input.value = '';
+      status.textContent = kind ? 'Tag enregistré.' : 'Tag ajouté. Cliquez sur Enregistrer dans la fenêtre d’édition pour le conserver.';
+      if (kind) {
+        render();
+        if (state.hookModal.open) renderHookModal(state.hookModal.hookNo);
+      }
+    } catch (error) {
+      status.textContent = `Erreur : ${error?.message ?? error}`;
+    } finally {
+      busy = false;
+      button.disabled = false;
+      input.focus();
+    }
+  };
+  document.body.append(dialog);
+  dialog.showModal();
+  dialog.querySelector('input').focus();
+}
+
 function buildTagSearchDetails(k, query) {
   const q = normalizeText(query).trim();
   if (!q) return [];
@@ -1610,6 +1701,7 @@ function getFavoriteEntries() {
         entry.keyring?.hook_no,
         entry.keyring?.ring_code,
         entry.keyring?.name,
+        parseKeyTags(entry.keyring?.tags).join(" "),
         ...entry.keys.map((key) => [
           key?.key_no,
           key?.local,
@@ -1666,7 +1758,7 @@ function renderFavorites() {
         formatFavoriteBorrowCount(entry.count),
         entry.lastLoanedAt ? `dernier le ${escapeHtml(formatDateFr(entry.lastLoanedAt))}` : "",
       ].filter(Boolean).join(" - ");
-      const tagDetails = (isRing ? ringKeys : [entry.key])
+      const tagDetails = (isRing ? [entry.keyring, ...ringKeys] : [entry.key])
         .flatMap(key => buildTagSearchDetails(key, state.q));
       return `
         <div class="item clickable" data-hook-no="${Number.isFinite(hookNo) ? hookNo : 0}">
@@ -2196,6 +2288,7 @@ function filterHook(hookNo, keysForHook, keyringsForHook, q) {
     if (t.includes(s)) return true;
   }
   for (const kr of keyringsForHook) {
+    if (parseKeyTags(kr.tags).some(tag => normalizeText(tag).includes(s))) return true;
     if (normalizeText(kr.name ?? "").includes(s)) return true;
   }
   return false;
@@ -2540,6 +2633,8 @@ function buildKeyringsByHook() {
       id: kr.id,
       ring_code: kr.ring_code ?? "A",
       name: kr.name ?? "",
+      tags: parseKeyTags(kr.tags),
+      tagDetails: buildTagSearchDetails(kr, q),
       keys,
     });
   }
@@ -2744,8 +2839,8 @@ function renderHookModal(hookNo) {
           ${loan && showLoanLine ? `<div class="muted">${loanLine}</div>` : ""}
           ${k.is_missing && missLine && !k.keyring_id ? `<div class="muted">${missLine}</div>` : ""}
         </div>
-        ${(canSelfBorrowCurrentCabinet || canReturn || canSignal || canAdminLendCurrentCabinet || (canAdminCurrentCabinet && (canEdit || canDelete))) ? `
           <div class="key-actions">
+            <button class="btn secondary icon-btn" data-action="key-tags" data-key-id="${k.id}" title="Tags de la clé" aria-label="Tags de la clé">${tagIcon()}</button>
             ${(showLoanToggle && ((loan && canReturn) || (!loan && (canSelfBorrowCurrentCabinet || canAdminLendCurrentCabinet)))) ? `
               <button class="${toggleBtnClass} ${toggleAction === "key-return" ? "btn-return" : "btn-borrow"}" data-action="${toggleAction}" data-key-id="${k.id}" ${loanIdAttr} ${toggleAttrs}>${toggleLabel}</button>
             ` : ""}
@@ -2759,7 +2854,6 @@ function renderHookModal(hookNo) {
               <button class="btn danger icon-btn reactive btn-delete" data-action="key-delete" data-key-id="${k.id}" title="Supprimer">X</button>
             ` : ""}
           </div>
-        ` : ""}
       </div>
     `;
   };
@@ -2816,9 +2910,10 @@ function renderHookModal(hookNo) {
               <span class="muted">(${keyringKeys.length} clés)</span>
             </div>
             ${ringLoanLine ? `<div class="muted keyring-loan">${ringLoanLine}</div>` : ""}
+            ${kr.tagDetails?.length ? `<div class="kdetail">${kr.tagDetails.join(" • ")}</div>` : ""}
           </div>
-          ${((canSelfBorrowCurrentCabinet || canReturn || canAdminLendCurrentCabinet) || (canAdminCurrentCabinet && (canEdit || canDelete))) ? `
             <div class="key-actions keyring-actions">
+              <button class="btn secondary icon-btn" data-action="keyring-tags" data-keyring-id="${kr.id}" title="Tags du trousseau" aria-label="Tags du trousseau">${tagIcon()}</button>
               ${((hasOnLoan && canReturn) || (!hasOnLoan && (canSelfBorrowCurrentCabinet || canAdminLendCurrentCabinet))) ? `
                 <button class="${toggleBtnClass} ${toggleAction === "keyring-return" ? "btn-return" : "btn-borrow"}" data-action="${toggleAction}" data-keyring-id="${kr.id}" ${toggleAttrs}>${toggleLabel}</button>
               ` : ""}
@@ -2829,7 +2924,6 @@ function renderHookModal(hookNo) {
                 <button class="btn danger icon-btn reactive btn-delete" data-action="keyring-delete" data-keyring-id="${kr.id}" title="Supprimer">X</button>
               ` : ""}
             </div>
-          ` : ""}
         </div>
         <div class="keyring-body" id="${bodyId}">
           ${keyringKeys.length ? "" : `<div class="muted">Aucune clé dans ce trousseau.</div>`}
@@ -3011,7 +3105,7 @@ function renderEditModal(keyId) {
   $("edit_local").value = key.local ?? "";
   $("edit_utilisation").value = key.utilisation ?? "";
   $("edit_remarque").value = key.remarque ?? "";
-  $("edit_tags").value = parseKeyTags(key.tags).join(", ");
+  renderTagEditor("edit_tags", key);
   $("edit_quantite").value = key.quantite ?? "1";
   const inferredPavilionId = resolvePavilionIdFromText(key.pavillon);
   $("edit_pavilion_id").innerHTML = buildPavilionOptionsHtml(key.pavilion_id ?? inferredPavilionId ?? null);
@@ -3058,6 +3152,7 @@ function renderKeyringEditModal(keyringId) {
   $("kr_edit_ring_code").value = kr.ring_code ?? "";
   $("kr_edit_name").value = kr.name ?? "";
   $("kr_edit_note").value = kr.note ?? "";
+  renderTagEditor("kr_edit_tags", kr);
   $("kr_edit_hook").textContent = `Crochet #${kr.hook_no ?? "—"}`;
 }
 
@@ -4273,6 +4368,10 @@ $("m_is_keyring").addEventListener("change", (e) => {
     try {
       btn.disabled = true;
 
+      if (action === "key-tags" || action === "keyring-tags") {
+        openTagDialog(action === "key-tags" ? "key" : "keyring", action === "key-tags" ? keyId : keyringId);
+        return;
+      }
       if (action === "keyring-borrow") {
         if (!canSelfBorrowCabinet()) throw new Error("Permission refusée: emprunt.");
         const kr = state.keyrings.find(k => k.id === keyringId);
@@ -4455,7 +4554,7 @@ $("m_is_keyring").addEventListener("change", (e) => {
     const pavillon = getPavilionLegacyTextById(pavilionId);
     const utilisation = $("edit_utilisation").value.trim();
     const remarque = $("edit_remarque").value.trim();
-    const tags = parseKeyTags($("edit_tags").value);
+    const tags = parseKeyTags($("edit_tags")._tags);
     const quantiteRaw = $("edit_quantite").value.trim();
     const quantiteNum = Number(quantiteRaw || "1");
     if (!Number.isFinite(quantiteNum) || quantiteNum <= 0 || !Number.isInteger(quantiteNum)) {
@@ -4476,7 +4575,8 @@ $("m_is_keyring").addEventListener("change", (e) => {
       if (!okQty) return;
     }
 
-    const payload = { key_no: keyNo, local, pavillon, pavilion_id: pavilionId, utilisation, remarque, tags };
+    const previousTags = parseKeyTags(key?.tags);
+    const payload = { key_no: keyNo, local, pavillon, pavilion_id: pavilionId, utilisation, remarque };
     if (hookNo != null) payload.hook_no = hookNo;
     if (changedHook) payload.keyring_id = null;
 
@@ -4487,6 +4587,7 @@ $("m_is_keyring").addEventListener("change", (e) => {
       if (error) throw error;
 
       const selectedRingId = $("edit_keyring").value ? Number($("edit_keyring").value) : null;
+      await saveAddedTags('key', key, tags);
       const currentRingId = getCurrentKeyringIdForKey(keyId);
 
       if (currentRingId !== selectedRingId) {
@@ -4510,7 +4611,7 @@ $("m_is_keyring").addEventListener("change", (e) => {
         pavilion_id: pavilionId,
       };
       const detailParts = [];
-      if (JSON.stringify(parseKeyTags(key?.tags)) !== JSON.stringify(tags)) {
+      if (JSON.stringify(previousTags) !== JSON.stringify(tags)) {
         detailParts.push(`tags: ${tags.join(", ") || "-"}`);
       }
       if ((key?.local ?? "") !== local) detailParts.push(`local: ${local || "-"}`);
@@ -4623,6 +4724,7 @@ $("m_is_keyring").addEventListener("change", (e) => {
       const ring_code = $("kr_edit_ring_code").value.trim();
       const name = $("kr_edit_name").value.trim();
       const note = $("kr_edit_note").value.trim();
+      const tags = parseKeyTags($("kr_edit_tags")._tags);
       const existing = state.keyrings.find(k => k.id === keyringId);
       const changedHook = existing && hookNo != null && Number(existing.hook_no) !== Number(hookNo);
       if (changedHook) {
@@ -4635,6 +4737,7 @@ $("m_is_keyring").addEventListener("change", (e) => {
         .update({ ring_code, name, note, ...(hookNo != null ? { hook_no: hookNo } : {}) })
         .eq("id", keyringId);
       if (error) throw error;
+      await saveAddedTags('keyring', existing, tags);
 
       if (changedHook) {
         const { error: kErr } = await supa

@@ -584,7 +584,7 @@ export async function listKeysByCabinet(cabinetId) {
 export async function listKeyringsByCabinet(cabinetId) {
   const { data, error } = await supa
     .from("keyrings")
-    .select("id, cabinet_id, hook_no, ring_code, name, note")
+    .select("id, cabinet_id, hook_no, ring_code, name, note, tags")
     .eq("cabinet_id", cabinetId)
     .order("hook_no", { ascending: true })
     .order("ring_code", { ascending: true });

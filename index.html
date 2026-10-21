@@ -509,11 +509,6 @@
       <input id="edit_remarque" class="input" />
     </label>
     <label class="field">
-      <div class="muted"><svg class="tag-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3 3h8l10 10-8 8L3 11Z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg> Tags</div>
-      <input id="edit_tags" class="input" placeholder="Archambault, ancien magasin" aria-describedby="edit_tags_help" />
-      <small id="edit_tags_help" class="muted">Séparez les tags par des virgules. Visibles dans les résultats lorsqu’ils correspondent à la recherche.</small>
-    </label>
-    <label class="field">
       <div class="muted">Quantité</div>
       <input id="edit_quantite" class="input" type="number" min="1" max="999" />
     </label>
@@ -524,6 +519,7 @@
   </div>
 
   <div class="row" style="margin-top:12px;">
+    <div id="edit_tags" class="tag-editor"></div>
     <button id="editSave" class="btn reactive">Enregistrer</button>
     <button id="editCancel" class="btn secondary reactive">Annuler</button>
     <div id="editStatus" class="muted"></div>
@@ -566,6 +562,7 @@
   </div>
 
   <div class="row" style="margin-top:12px;">
+    <div id="kr_edit_tags" class="tag-editor"></div>
     <button id="krEditSave" class="btn reactive">Enregistrer</button>
     <button id="krEditCancel" class="btn secondary reactive">Annuler</button>
     <div id="krEditStatus" class="muted"></div>

@@ -32,6 +32,7 @@ export function renderHookCard({ hookNo, keyLines, keyrings, role }) {
                   <span class="muted">(${kr.keys.length} clés)</span>
                 </div>
                 <div class="kgrid keyring-grid">
+                  ${kr.tagDetails?.length ? `<div class="kdetail">${kr.tagDetails.join(" • ")}</div>` : ""}
                   ${kr.keys.map(renderKeyLine).join("")}
                 </div>
               </div>
