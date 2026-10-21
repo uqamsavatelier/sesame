@@ -387,6 +387,10 @@ export async function updateCabinet(cabinetId, patch) {
   if (!beforeRow) throw new Error("Armoire introuvable.");
 
   const updates = {};
+  const existingCabinetType = beforeRow.cabinet_type ?? "keys";
+  if (patch?.cabinet_type !== undefined && String(patch.cabinet_type ?? "keys") !== existingCabinetType) {
+    throw new Error("Le type d'une armoire ne peut plus être modifié après sa création.");
+  }
   if (patch?.name != null) {
     const name = String(patch.name).trim();
     if (!name) throw new Error("Nom d'armoire requis.");
@@ -407,8 +411,6 @@ export async function updateCabinet(cabinetId, patch) {
   if (patch?.cabinet_type !== undefined) {
     const cabinetType = String(patch.cabinet_type ?? "keys");
     if (!["keys", "equipment", "other"].includes(cabinetType)) throw new Error("Type d'armoire invalide.");
-    updates.cabinet_type = cabinetType;
-    if (cabinetType !== "keys") updates.max_hooks = null;
   }
   if (patch?.pavilion_id !== undefined) {
     if (patch.pavilion_id == null || String(patch.pavilion_id).trim() === "") {

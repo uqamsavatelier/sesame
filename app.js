@@ -2006,6 +2006,14 @@ function renderCabinetGrid() {
   }
 }
 
+function syncCabinetTypeForm(type, prefix, locked = false) {
+  const cabinetType = type === "keys" ? "keys" : (type || "other");
+  const typeInput = $(`cab_${prefix}_type`);
+  const maxField = $(`cab${prefix === "create" ? "Create" : "Edit"}MaxHooksField`);
+  if (typeInput) typeInput.disabled = locked;
+  if (maxField) maxField.hidden = cabinetType !== "keys";
+}
+
 function renderCabinetManagersEditor() {
   const section = $("cabinetManagersSection");
   if (!section) return;
@@ -2114,6 +2122,7 @@ async function openCabinetEditModal(cabinetId) {
   $("cab_edit_name").value = String(cab.name ?? "");
   $("cab_edit_location").value = String(cab.location ?? "");
   $("cab_edit_type").value = cab.cabinet_type ?? "keys";
+  syncCabinetTypeForm(cab.cabinet_type ?? "keys", "edit", true);
   $("cab_edit_max_hooks").value = Number.isFinite(Number(cab.max_hooks)) && Number(cab.max_hooks) > 0
     ? String(Math.trunc(Number(cab.max_hooks)))
     : "";
@@ -2156,6 +2165,7 @@ function openCabinetCreateModal() {
   $("cab_create_name").value = "";
   $("cab_create_location").value = "";
   $("cab_create_type").value = "keys";
+  syncCabinetTypeForm("keys", "create");
   $("cab_create_max_hooks").value = "";
   $("cab_create_pavilion_id").innerHTML = buildPavilionOptionsHtml(null);
   syncCabinetGroupInputs(getCurrentUserGroup());
@@ -3812,6 +3822,7 @@ renderHookExistingDetails(Number($("m_hook").value));
   $("cabCreateClose").addEventListener("click", closeCabinetCreateModal);
   $("cabCreateCancel").addEventListener("click", closeCabinetCreateModal);
   $("cabinetCreateOverlay").addEventListener("click", closeCabinetCreateModal);
+  $("cab_create_type").addEventListener("change", (e) => syncCabinetTypeForm(e.target.value, "create"));
   $("cabinetQrClose").addEventListener("click", closeCabinetQrModal);
   $("cabinetQrOverlay").addEventListener("click", closeCabinetQrModal);
   $("cabinetQrDownload").addEventListener("click", downloadCabinetQr);
