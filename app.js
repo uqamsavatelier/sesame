@@ -156,6 +156,16 @@ function groupLabel(group) {
     : "Employé";
 }
 
+const CABINET_SECTORS = [
+  "Atelier", "SEA Est", "SEA Ouest", "CCC", "Production", "Direction",
+  "Comptoirs de prêts général", "Comptoirs de prêts cinéma",
+];
+
+function cabinetSectorOptions(selected = null) {
+  return [`<option value="">— Aucun secteur —</option>`, ...CABINET_SECTORS.map((sector) =>
+    `<option value="${escapeHtml(sector)}"${sector === selected ? " selected" : ""}>${escapeHtml(sector)}</option>`)].join("");
+}
+
 function isSuperAdminRole(role) {
   return normalizeRole(role) === "super_admin";
 }
@@ -1907,7 +1917,6 @@ function renderCabinetGrid() {
     const canEditCabinet = canConfigureCabinet(c);
     const metaParts = [];
     if (c.is_active === false) metaParts.push("Hors fonction");
-    if (c.location) metaParts.push(c.location);
     if (c.cabinet_type === "equipment") metaParts.push("Appareils / tests");
     else if (Number.isFinite(Number(c.max_hooks)) && Number(c.max_hooks) > 0) {
       metaParts.push(`max ${Math.trunc(Number(c.max_hooks))} crochets`);
@@ -1932,12 +1941,14 @@ function renderCabinetGrid() {
             ${canEditCabinet ? `<button class="btn secondary icon-btn btn-edit cabinet-edit-btn" data-cabinet-id="${c.id}" type="button" aria-label="Éditer l'armoire" title="Éditer">✎</button>` : ""}
           </div>`)
       : "";
+    const locationLine = [c.location, c.sector].filter(Boolean).map((value) => `<strong>${escapeHtml(value)}</strong>`).join(" <span class="muted">•</span> ");
     return `
       <div class="cabinet-card ${c.is_active === false ? "inactive" : ""}" data-cabinet-id="${c.id}">
         <div class="cabinet-card-head">
           <div class="cabinet-name">${escapeHtml(c.name)}</div>
           ${adminActions}
         </div>
+        ${locationLine ? `<div class="cabinet-meta cabinet-location-line">${locationLine}</div>` : ""}
         <div class="cabinet-meta">${metaParts.map((part) => escapeHtml(part)).join(" • ")}</div>
       </div>
     `;
@@ -2121,6 +2132,7 @@ async function openCabinetEditModal(cabinetId) {
   state.cabinetEditModal.managersLoading = true;
   $("cab_edit_name").value = String(cab.name ?? "");
   $("cab_edit_location").value = String(cab.location ?? "");
+  $("cab_edit_sector").innerHTML = cabinetSectorOptions(cab.sector ?? null);
   $("cab_edit_type").value = cab.cabinet_type ?? "keys";
   syncCabinetTypeForm(cab.cabinet_type ?? "keys", "edit", true);
   $("cab_edit_max_hooks").value = Number.isFinite(Number(cab.max_hooks)) && Number(cab.max_hooks) > 0
@@ -2164,6 +2176,7 @@ function openCabinetCreateModal() {
   state.cabinetCreateModal.open = true;
   $("cab_create_name").value = "";
   $("cab_create_location").value = "";
+  $("cab_create_sector").innerHTML = cabinetSectorOptions(null);
   $("cab_create_type").value = "keys";
   syncCabinetTypeForm("keys", "create");
   $("cab_create_max_hooks").value = "";
@@ -3829,6 +3842,7 @@ renderHookExistingDetails(Number($("m_hook").value));
   $("cabCreateSave").addEventListener("click", async () => {
     const name = $("cab_create_name").value.trim();
     const location = $("cab_create_location").value.trim();
+    const sector = $("cab_create_sector").value || null;
     const maxRaw = $("cab_create_max_hooks").value.trim();
     const maxHooks = Number(maxRaw);
     const cabinetType = $("cab_create_type").value || "keys";
@@ -3866,6 +3880,7 @@ renderHookExistingDetails(Number($("m_hook").value));
       await createCabinet({
         name,
         location: location || null,
+        sector,
         max_hooks: Math.trunc(maxHooks),
         cabinet_type: cabinetType,
         pavilion_id: pavilionId,
@@ -3933,6 +3948,7 @@ renderHookExistingDetails(Number($("m_hook").value));
 
     const name = $("cab_edit_name").value.trim();
     const location = $("cab_edit_location").value.trim();
+    const sector = $("cab_edit_sector").value || null;
     const isActive = $("cab_edit_is_active").value === "true";
     const pavilionIdRaw = $("cab_edit_pavilion_id").value.trim();
     const pavilionId = pavilionIdRaw ? Number(pavilionIdRaw) : null;
@@ -3971,6 +3987,7 @@ renderHookExistingDetails(Number($("m_hook").value));
       await updateCabinet(cabinetId, {
         name,
         location: location || null,
+        sector,
         is_active: isActive,
         max_hooks: cabinetType === "keys" ? Math.trunc(maxHooks) : null,
         cabinet_type: cabinetType,

@@ -143,7 +143,7 @@ async function callFunctionRaw(name, body) {
 export async function listCabinets(options = {}) {
   const includeInactive = !!options?.includeInactive;
   const selects = [
-    "id,name,location,is_active,max_hooks,cabinet_type,pavilion_id,user_group,allow_consultation,allow_self_borrow,allow_admin_lending",
+    "id,name,location,sector,is_active,max_hooks,cabinet_type,pavilion_id,user_group,allow_consultation,allow_self_borrow,allow_admin_lending",
     "id,name,location,is_active,max_hooks,user_group,allow_consultation,allow_self_borrow,allow_admin_lending",
     "id,name,location,is_active,user_group,allow_consultation,allow_self_borrow,allow_admin_lending",
     "id,name,location,is_active,max_hooks,pavilion_id,user_group",
@@ -166,6 +166,7 @@ export async function listCabinets(options = {}) {
         ...c,
         max_hooks: c?.max_hooks ?? null,
         cabinet_type: c?.cabinet_type ?? "keys",
+        sector: c?.sector ?? null,
         pavilion_id: c?.pavilion_id ?? null,
         user_group: normalizeGroup(c?.user_group ?? "employe"),
         allow_consultation: c?.allow_consultation !== false,
@@ -181,6 +182,7 @@ export async function listCabinets(options = {}) {
 export async function createCabinet(payload) {
   const name = String(payload?.name ?? "").trim();
   const location = payload?.location != null ? String(payload.location).trim() : null;
+  const sector = payload?.sector != null ? String(payload.sector).trim() || null : null;
   const maxHooksRaw = Number(payload?.max_hooks);
   const cabinet_type = ["keys", "equipment", "other"].includes(String(payload?.cabinet_type ?? "keys"))
     ? String(payload.cabinet_type ?? "keys") : "keys";
@@ -204,6 +206,7 @@ export async function createCabinet(payload) {
       location,
         max_hooks,
         cabinet_type,
+        sector,
         pavilion_id,
         user_group,
         allow_consultation,
@@ -211,7 +214,7 @@ export async function createCabinet(payload) {
         allow_admin_lending,
         is_active: true,
       })
-    .select("id,name,location,is_active,max_hooks,cabinet_type,pavilion_id,user_group,allow_consultation,allow_self_borrow,allow_admin_lending")
+    .select("id,name,location,sector,is_active,max_hooks,cabinet_type,pavilion_id,user_group,allow_consultation,allow_self_borrow,allow_admin_lending")
     .single();
 
   if (result.error && /user_group/i.test(String(result.error?.message ?? ""))) {
@@ -255,6 +258,7 @@ export async function createCabinet(payload) {
     location,
     max_hooks,
     cabinet_type,
+    sector,
     pavilion_id,
     user_group,
     allow_consultation,
@@ -365,7 +369,7 @@ export async function updateCabinet(cabinetId, patch) {
   let beforeRow = null;
   let beforeErr = null;
   for (const selectClause of [
-    "id,name,location,is_active,max_hooks,pavilion_id,user_group,allow_consultation,allow_self_borrow,allow_admin_lending",
+    "id,name,location,sector,is_active,max_hooks,pavilion_id,user_group,allow_consultation,allow_self_borrow,allow_admin_lending",
     "id,name,location,is_active,max_hooks,pavilion_id,user_group",
     "id,name,location,is_active,max_hooks,pavilion_id",
     "id,name,location,is_active,max_hooks",
@@ -399,6 +403,10 @@ export async function updateCabinet(cabinetId, patch) {
   if (patch?.location !== undefined) {
     const location = patch.location == null ? null : String(patch.location).trim();
     updates.location = location || null;
+  }
+  if (patch?.sector !== undefined) {
+    const sector = patch.sector == null ? null : String(patch.sector).trim();
+    updates.sector = sector || null;
   }
   if (patch?.is_active !== undefined) {
     updates.is_active = !!patch.is_active;
@@ -455,7 +463,7 @@ export async function updateCabinet(cabinetId, patch) {
     .from("cabinets")
     .update(writeUpdates)
     .eq("id", id)
-    .select("id,name,location,is_active,max_hooks,cabinet_type,pavilion_id,user_group,allow_consultation,allow_self_borrow,allow_admin_lending")
+    .select("id,name,location,sector,is_active,max_hooks,cabinet_type,pavilion_id,user_group,allow_consultation,allow_self_borrow,allow_admin_lending")
     .single();
 
   if (result.error && /pavilion_id/i.test(String(result.error.message ?? "")) && "pavilion_id" in writeUpdates) {
@@ -533,6 +541,7 @@ export async function updateCabinet(cabinetId, patch) {
     allow_self_borrow: data?.allow_self_borrow ?? beforeRow?.allow_self_borrow ?? true,
     allow_admin_lending: data?.allow_admin_lending ?? beforeRow?.allow_admin_lending ?? false,
     cabinet_type: data?.cabinet_type ?? beforeRow?.cabinet_type ?? "keys",
+    sector: data?.sector ?? beforeRow?.sector ?? null,
   };
 }
 
