@@ -1941,7 +1941,7 @@ function renderCabinetGrid() {
             ${canEditCabinet ? `<button class="btn secondary icon-btn btn-edit cabinet-edit-btn" data-cabinet-id="${c.id}" type="button" aria-label="Éditer l'armoire" title="Éditer">✎</button>` : ""}
           </div>`)
       : "";
-    const locationLine = [c.location, c.sector].filter(Boolean).map((value) => `<strong>${escapeHtml(value)}</strong>`).join(" <span class="muted">•</span> ");
+    const locationLine = [c.location, c.sector].filter(Boolean).map((value) => `<strong>${escapeHtml(value)}</strong>`).join(' <span class="muted">•</span> ');
     return `
       <div class="cabinet-card ${c.is_active === false ? "inactive" : ""}" data-cabinet-id="${c.id}">
         <div class="cabinet-card-head">
