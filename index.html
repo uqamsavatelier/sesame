@@ -365,10 +365,11 @@
     <label class="field"><div class="muted">Fin de garantie</div><input id="m_warranty_end_date" class="input" type="date" /></label>
     <label class="field"><div class="muted">Description</div><input id="m_description" class="input" placeholder="Appareil de mesure réseau" /></label>
     <label class="field"><div class="muted">Remarque</div><input id="m_equipment_remarque" class="input" placeholder="Ne fonctionne pas avec des signaux 1G" /></label>
-    <label class="field"><div class="muted">Accessoires du kit</div><input id="m_accessories" class="input" placeholder="Sangle, connecteur cat5E" /></label>
+    <label class="field"><div class="muted">Accessoires inclus dans le kit</div><div id="equipmentAccessoryRows" class="equipment-accessory-rows"></div><button id="btnAddEquipmentAccessory" class="btn secondary" type="button">Ajouter un accessoire</button></label>
     <label class="field"><div class="muted">Tags</div><input id="m_tags" class="input" placeholder="reseau, cat5e, stp" /></label>
     <label class="field"><div class="muted">Photos de l'appareil</div><input id="m_equipment_photos" class="input" type="file" accept="image/jpeg,image/png,image/webp" multiple /><div class="muted">JPG, PNG ou WebP — 10 Mo maximum par photo</div></label>
   </div>
+  <div id="legacyKeyFields">
   <!-- ligne 1: crochet / clé / pav / local / qty -->
   <div class="row compact">
     <div class="field">
@@ -428,6 +429,7 @@
         <div class="spacer"></div>
       </div>
     </div>
+  </div>
 
     <div class="row" style="margin-top:14px;">
       <button id="btnManualSubmit" class="btn">Ajouter</button>

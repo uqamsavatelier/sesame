@@ -3176,12 +3176,39 @@ function syncAddItemsForm() {
   $("addItemsTitle").textContent = equipment ? "Ajouter un appareil" : "Ajouter des clés";
   $("addItemsSubtitle").textContent = equipment ? "Fiche d'appareil et informations Hector Collector" : "Import CSV ou ajout manuel";
   $("equipmentFields").hidden = !equipment;
+  $("legacyKeyFields").hidden = equipment;
   $("tabCsv").hidden = equipment;
   if (equipment) setTab("manual");
-  ["m_hook", "m_keyno", "m_pavilion_id", "m_local", "m_qty", "m_utilisation", "m_is_keyring"].forEach((id) => {
-    const el = $(id);
-    if (el) el.closest(".field, .checkline")?.toggleAttribute("hidden", equipment);
-  });
+  if (equipment && !document.querySelector("#equipmentAccessoryRows .equipment-accessory")) addEquipmentAccessoryRow();
+}
+
+function addEquipmentAccessoryRow(value = "") {
+  const host = $("equipmentAccessoryRows");
+  if (!host) return;
+  const row = document.createElement("div");
+  row.className = "equipment-accessory-row";
+  row.innerHTML = `<input class="input equipment-accessory" placeholder="Ex. Câble BNC" value="${escapeHtml(value)}" /><button class="btn secondary equipment-accessory-remove" type="button" aria-label="Retirer l'accessoire">Retirer</button>`;
+  host.appendChild(row);
+}
+
+function getEquipmentAccessories() {
+  return [...document.querySelectorAll("#equipmentAccessoryRows .equipment-accessory")]
+    .map((input) => input.value.trim())
+    .filter(Boolean);
+}
+
+function resetEquipmentAccessoryRows() {
+  const host = $("equipmentAccessoryRows");
+  if (host) host.innerHTML = "";
+}
+
+function renderEquipmentAccessories(value) {
+  const accessories = String(value ?? "")
+    .split(/\r?\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (!accessories.length) return "";
+  return `<div class="equipment-accessories"><strong>Accessoires inclus dans le kit :</strong><ul>${accessories.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>`;
 }
 
 function updateCabinetItemTerminology() {
@@ -3600,7 +3627,7 @@ function render() {
       details: [
         [item.brand, item.model].filter(Boolean).join(" "),
         item.description,
-        item.accessories ? `Accessoires: ${item.accessories}` : "",
+        renderEquipmentAccessories(item.accessories),
         item.purchase_date || item.warranty_end_date ? `Achat: ${item.purchase_date || "—"} • Garantie: ${item.warranty_end_date || "—"}` : "",
         parseKeyTags(item.tags).length ? `Tags: ${parseKeyTags(item.tags).join(", ")}` : "",
         (() => {
@@ -3796,6 +3823,7 @@ function resetManualForm() {
   $("m_is_keyring").checked = false;
   $("keyringBox").style.display = "none";
   $("keyringRows").innerHTML = "";
+  resetEquipmentAccessoryRows();
 }
 function resetManualEntryFieldsKeepHook() {
   $("m_keyno").value = "";
@@ -3807,6 +3835,7 @@ function resetManualEntryFieldsKeepHook() {
   $("m_is_keyring").checked = false;
   $("keyringBox").style.display = "none";
   $("keyringRows").innerHTML = "";
+  resetEquipmentAccessoryRows();
 }
 let manualStatusTimer = null;
 function setManualStatus(msg, clearAfterMs = 0) {
@@ -4329,6 +4358,11 @@ $("m_is_keyring").addEventListener("change", (e) => {
   $("btnAddKeyringRow").addEventListener("click", () => {
   $("keyringRows").appendChild(mkKeyringRow($("m_pavilion_id").value, $("m_local").value));
 });
+  $("btnAddEquipmentAccessory")?.addEventListener("click", () => addEquipmentAccessoryRow());
+  $("equipmentAccessoryRows")?.addEventListener("click", (event) => {
+    if (!event.target.closest(".equipment-accessory-remove")) return;
+    event.target.closest(".equipment-accessory-row")?.remove();
+  });
   $("btnHectorAutofill")?.addEventListener("click", async () => {
     const status = $("hectorAutofillStatus");
     const inventory = $("m_inventory_number")?.value.trim();
@@ -4374,7 +4408,7 @@ $("m_is_keyring").addEventListener("change", (e) => {
         purchase_date: $("m_purchase_date").value || null,
         warranty_end_date: $("m_warranty_end_date").value || null,
         description: $("m_description").value.trim() || null,
-        accessories: $("m_accessories").value.trim() || null,
+        accessories: getEquipmentAccessories().join("\n") || null,
         remarque: $("m_equipment_remarque").value.trim() || null,
         tags,
       }).select("id").single();
@@ -4387,7 +4421,8 @@ $("m_is_keyring").addEventListener("change", (e) => {
       setManualStatus("Appareil ajouté", 5000);
       await loadDataForCabinet();
       render();
-      ["m_inventory_number", "m_brand", "m_model", "m_purchase_date", "m_warranty_end_date", "m_description", "m_equipment_remarque", "m_accessories", "m_tags", "m_remarque", "m_equipment_photos"].forEach((id) => { if ($(id)) $(id).value = ""; });
+      ["m_inventory_number", "m_brand", "m_model", "m_purchase_date", "m_warranty_end_date", "m_description", "m_equipment_remarque", "m_tags", "m_remarque", "m_equipment_photos"].forEach((id) => { if ($(id)) $(id).value = ""; });
+      resetEquipmentAccessoryRows();
       return;
     }
 

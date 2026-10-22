@@ -2294,3 +2294,8 @@ body[data-theme="light"] .seg-label{
   border-radius:8px;
   border:1px solid var(--border);
 }
+.equipment-accessory-rows{display:grid;gap:6px;margin-bottom:8px}
+.equipment-accessory-row{display:flex;gap:8px;align-items:center}
+.equipment-accessory-row .input{flex:1}
+.equipment-accessories{margin-top:4px}
+.equipment-accessories ul{margin:4px 0 0 18px;padding:0}
