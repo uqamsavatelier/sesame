@@ -3803,10 +3803,12 @@ function render() {
     const lines = items.map((item) => ({
       key_id: item.id,
       text: item.slot_code || item.inventory_number || `Appareil ${item.id}`,
-      html: escapeHtml([item.slot_code, [item.brand, item.model].filter(Boolean).join(" "), item.inventory_number || `Appareil ${item.id}`].filter(Boolean).join(" · ")),
+      html: escapeHtml([[item.brand, item.model].filter(Boolean).join(" "), item.inventory_number].filter(Boolean).join(" · ") || `Appareil ${item.id}`),
       details: [
         item.description ? escapeHtml(item.description) : "",
       ].filter(Boolean),
+      equipment: true,
+      slotCode: item.slot_code || "",
       className: "equipment-list-cell",
       media: (state.equipmentPhotosByKey.get(item.id) ?? []).find((photo) => photo.signed_url)?.signed_url
         ? `<img class="equipment-list-photo" src="${escapeHtml((state.equipmentPhotosByKey.get(item.id) ?? []).find((photo) => photo.signed_url).signed_url)}" alt="" loading="lazy">`

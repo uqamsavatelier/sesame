@@ -17,6 +17,11 @@ export function renderHookCard({ hookNo, keyLines, keyrings, role }) {
   const renderKeyLine = (k) => {
     const pillText = k.html ? k.html : escapeHtml(k.text);
     const detail = k.details?.length ? `<div class="kdetail">${k.details.join(" • ")}</div>` : "";
+    if (k.equipment) {
+      const slot = k.slotCode ? `<strong>${escapeHtml(k.slotCode)}</strong>` : "";
+      const description = k.details?.length ? ` <span>· ${k.details[0]}</span>` : "";
+      return `<div class="kcell equipment-list-cell ${k.className ?? ""}"><div class="equipment-list-label">${slot}${description}</div><span class="${badge(k.state)}">${pillText}</span>${k.media ?? ""}</div>`;
+    }
     return `<div class="kcell ${k.className ?? ""}"><span class="${badge(k.state)}">${pillText}</span>${detail}${k.media ?? ""}</div>`;
   };
 
