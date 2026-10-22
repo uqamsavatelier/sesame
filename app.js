@@ -2825,7 +2825,7 @@ function renderEquipmentDetailModal() {
   const canDelete = canCabinetAction("suppression");
   const canSignal = canRole("signalement");
   const canEdit = canAdministrateCurrentCabinet() && canCabinetAction("edition");
-  const canAdminLend = canAdminLendCurrentCabinet();
+  const canAdminLend = canAdminLendCabinet();
   const canSelfBorrow = canSelfBorrowCabinet();
   $("hookModalTitle").textContent = "Fiche des appareils";
   $("hookModalActions").style.display = "none";
