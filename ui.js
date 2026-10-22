@@ -17,7 +17,7 @@ export function renderHookCard({ hookNo, keyLines, keyrings, role }) {
   const renderKeyLine = (k) => {
     const pillText = k.html ? k.html : escapeHtml(k.text);
     const detail = k.details?.length ? `<div class="kdetail">${k.details.join(" • ")}</div>` : "";
-    return `<div class="kcell"><span class="${badge(k.state)}">${pillText}</span>${detail}</div>`;
+    return `<div class="kcell ${k.className ?? ""}"><span class="${badge(k.state)}">${pillText}</span>${detail}${k.media ?? ""}</div>`;
   };
 
   const keyringHtml = keyrings.length

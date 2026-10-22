@@ -2839,11 +2839,11 @@ function renderEquipmentDetailModal() {
   const canEdit = canAdministrateCurrentCabinet() && canCabinetAction("edition");
   const canAdminLend = canAdminLendCabinet();
   const canSelfBorrow = canSelfBorrowCabinet();
-  $("hookModalTitle").textContent = "Fiche des appareils";
-  $("hookModalSub").textContent = "Détail des appareils";
+  $("hookModalTitle").textContent = "Appareils / équipements";
+  $("hookModalSub").textContent = "";
   $("hookModalActions").style.display = "none";
   const container = $("hookModalContent");
-  container.innerHTML = `<div class="hook-section"><div class="hook-section-title">Appareils / équipements</div><div class="hook-list" id="equipmentDetailList"></div></div>`;
+  container.innerHTML = `<div class="hook-section"><div class="hook-list" id="equipmentDetailList"></div></div>`;
   const list = $("equipmentDetailList");
 
   for (const item of state.keys) {
@@ -2851,7 +2851,7 @@ function renderEquipmentDetailModal() {
     const photos = state.equipmentPhotosByKey.get(item.id) ?? [];
     const accessories = renderEquipmentAccessories(item.accessories);
     const tags = parseKeyTags(item.tags);
-    const title = [[item.brand, item.model].filter(Boolean).join(" "), item.inventory_number || `Appareil ${item.id}`].filter(Boolean).join(" | ");
+    const title = [[item.brand, item.model].filter(Boolean).join(" "), item.inventory_number || `Appareil ${item.id}`].filter(Boolean).join(" · ");
     const loanAction = loan ? "key-return" : (canAdminLend ? "key-admin-loan" : "key-borrow");
     const loanLabel = loan ? "Retourner" : (canAdminLend ? "Prêter" : "Emprunter");
     const canLoan = loan ? canReturn : (canSelfBorrow || canAdminLend);
@@ -2860,6 +2860,13 @@ function renderEquipmentDetailModal() {
     const loanHtml = loan ? `<div class="muted">Emprunté par : ${escapeHtml(loanBorrowerLabel(loan))} le ${escapeHtml(formatDateFr(loan.loaned_at))}</div>` : "";
     list.insertAdjacentHTML("beforeend", `
       <div class="key-row equipment-detail-row" data-key-id="${item.id}">
+        <div class="equipment-detail-actions">
+          <button class="btn secondary icon-btn" data-action="key-tags" data-key-id="${item.id}" title="Tags de l'appareil" aria-label="Tags de l'appareil">${tagIcon()}</button>
+          ${canLoan ? `<button class="btn reactive ${loan ? "btn-return" : "btn-borrow"}" data-action="${loanAction}" data-key-id="${item.id}" ${loan ? `data-loan-id="${loan.id}"` : ""}>${loanLabel}</button>` : ""}
+          ${canSignal ? `<button class="btn secondary reactive" data-action="${item.is_missing ? "key-found" : "key-missing"}" data-key-id="${item.id}">${item.is_missing ? "Signalée retrouvée" : "Signaler disparue"}</button>` : ""}
+          ${canEdit ? `<button class="btn secondary icon-btn reactive" data-action="key-edit" data-key-id="${item.id}" title="Éditer">✎</button>` : ""}
+          ${canDelete ? `<button class="btn danger icon-btn" data-action="key-delete" data-key-id="${item.id}" title="Supprimer">X</button>` : ""}
+        </div>
         <div class="key-main">
           <strong>${escapeHtml(title)}</strong>
           ${item.description ? `<div class="muted">${escapeHtml(item.description)}</div>` : ""}
@@ -2868,13 +2875,6 @@ function renderEquipmentDetailModal() {
           <div class="equipment-detail-media"><div class="equipment-detail-accessories">${accessories || `<div class="muted">Aucun accessoire</div>`}</div>${photoHtml}</div>
           ${tagHtml}
           ${loanHtml}
-        </div>
-        <div class="key-actions">
-          <button class="btn secondary icon-btn" data-action="key-tags" data-key-id="${item.id}" title="Tags de l'appareil" aria-label="Tags de l'appareil">${tagIcon()}</button>
-          ${canLoan ? `<button class="btn reactive ${loan ? "btn-return" : "btn-borrow"}" data-action="${loanAction}" data-key-id="${item.id}" ${loan ? `data-loan-id="${loan.id}"` : ""}>${loanLabel}</button>` : ""}
-          ${canSignal ? `<button class="btn secondary reactive" data-action="${item.is_missing ? "key-found" : "key-missing"}" data-key-id="${item.id}">${item.is_missing ? "Signalée retrouvée" : "Signaler disparue"}</button>` : ""}
-          ${canEdit ? `<button class="btn secondary icon-btn reactive" data-action="key-edit" data-key-id="${item.id}" title="Éditer">✎</button>` : ""}
-          ${canDelete ? `<button class="btn danger icon-btn" data-action="key-delete" data-key-id="${item.id}" title="Supprimer">X</button>` : ""}
         </div>
       </div>
     `);
@@ -3787,10 +3787,14 @@ function render() {
     const lines = items.map((item) => ({
       key_id: item.id,
       text: item.inventory_number || `Appareil ${item.id}`,
-      html: escapeHtml([[item.brand, item.model].filter(Boolean).join(" "), item.inventory_number || `Appareil ${item.id}`].filter(Boolean).join(" | ")),
+      html: escapeHtml([[item.brand, item.model].filter(Boolean).join(" "), item.inventory_number || `Appareil ${item.id}`].filter(Boolean).join(" · ")),
       details: [
         item.description ? escapeHtml(item.description) : "",
       ].filter(Boolean),
+      className: "equipment-list-cell",
+      media: (state.equipmentPhotosByKey.get(item.id) ?? []).find((photo) => photo.signed_url)?.signed_url
+        ? `<img class="equipment-list-photo" src="${escapeHtml((state.equipmentPhotosByKey.get(item.id) ?? []).find((photo) => photo.signed_url).signed_url)}" alt="" loading="lazy">`
+        : "",
       state: state.loansByKey?.has(item.id) ? "onloan" : "ok",
     }));
     renderPager(1, items.length);
