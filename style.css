@@ -2304,22 +2304,27 @@ body[data-theme="light"] .seg-label{
 .equipment-accessories{margin-top:4px}
 .equipment-accessories ul{margin:4px 0 0 18px;padding:0}
 .equipment-detail-row{align-items:flex-start}
-.equipment-detail-row .equipment-detail-actions{
+.equipment-detail-head{
   width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+.equipment-detail-row .equipment-detail-actions{
   display:flex;
   justify-content:flex-end;
   align-items:center;
   gap:6px;
   flex-wrap:nowrap;
-  order:0;
 }
-.equipment-detail-row .key-main{width:100%;order:1}
+.equipment-detail-row .key-main{width:100%}
 .equipment-detail-tags{margin-top:6px}
 .tag-chip{display:inline-block;padding:2px 7px;border-radius:999px;background:var(--panel-2);border:1px solid var(--border);font-size:12px}
 .equipment-edit-photo-list{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .equipment-edit-photo{display:flex;flex-direction:column;gap:5px;align-items:flex-start}
 .equipment-edit-photo img{width:110px;height:82px;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
-.equipment-detail-media{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,42%);gap:18px;align-items:center;margin-top:8px}
+.equipment-detail-media{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,36%);gap:18px;align-items:center;margin-top:8px}
 .equipment-detail-accessories{min-width:0}
 .equipment-detail-accessories li{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .equipment-detail-media .equipment-photo-strip{margin-top:0;justify-content:center;align-items:center}
@@ -2328,6 +2333,7 @@ body[data-theme="light"] .seg-label{
 .equipment-list-cell > *:not(.equipment-list-photo){position:relative;z-index:1}
 .equipment-list-photo{position:absolute;z-index:0;right:-2px;top:0;width:min(48%,300px);height:100%;object-fit:contain;object-position:right center;opacity:.7;mask-image:linear-gradient(to right,transparent 0%,black 48%,black 100%);-webkit-mask-image:linear-gradient(to right,transparent 0%,black 48%,black 100%);pointer-events:none}
 @media (max-width:720px){
+  .equipment-detail-head{align-items:flex-start;flex-direction:column;gap:8px}
   .equipment-detail-row .equipment-detail-actions{flex-wrap:wrap;justify-content:flex-start}
   .equipment-detail-media{grid-template-columns:1fr}
   .equipment-detail-media .equipment-photo-strip{order:-1}

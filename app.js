@@ -2860,15 +2860,14 @@ function renderEquipmentDetailModal() {
     const loanHtml = loan ? `<div class="muted">Emprunté par : ${escapeHtml(loanBorrowerLabel(loan))} le ${escapeHtml(formatDateFr(loan.loaned_at))}</div>` : "";
     list.insertAdjacentHTML("beforeend", `
       <div class="key-row equipment-detail-row" data-key-id="${item.id}">
-        <div class="equipment-detail-actions">
-          <button class="btn secondary icon-btn" data-action="key-tags" data-key-id="${item.id}" title="Tags de l'appareil" aria-label="Tags de l'appareil">${tagIcon()}</button>
-          ${canLoan ? `<button class="btn reactive ${loan ? "btn-return" : "btn-borrow"}" data-action="${loanAction}" data-key-id="${item.id}" ${loan ? `data-loan-id="${loan.id}"` : ""}>${loanLabel}</button>` : ""}
-          ${canSignal ? `<button class="btn secondary reactive" data-action="${item.is_missing ? "key-found" : "key-missing"}" data-key-id="${item.id}">${item.is_missing ? "Signalée retrouvée" : "Signaler disparue"}</button>` : ""}
-          ${canEdit ? `<button class="btn secondary icon-btn reactive" data-action="key-edit" data-key-id="${item.id}" title="Éditer">✎</button>` : ""}
-          ${canDelete ? `<button class="btn danger icon-btn" data-action="key-delete" data-key-id="${item.id}" title="Supprimer">X</button>` : ""}
-        </div>
         <div class="key-main">
-          <strong>${escapeHtml(title)}</strong>
+          <div class="equipment-detail-head"><strong>${escapeHtml(title)}</strong><div class="equipment-detail-actions">
+            <button class="btn secondary icon-btn" data-action="key-tags" data-key-id="${item.id}" title="Tags de l'appareil" aria-label="Tags de l'appareil">${tagIcon()}</button>
+            ${canLoan ? `<button class="btn reactive ${loan ? "btn-return" : "btn-borrow"}" data-action="${loanAction}" data-key-id="${item.id}" ${loan ? `data-loan-id="${loan.id}"` : ""}>${loanLabel}</button>` : ""}
+            ${canSignal ? `<button class="btn secondary reactive" data-action="${item.is_missing ? "key-found" : "key-missing"}" data-key-id="${item.id}">${item.is_missing ? "Signalée retrouvée" : "Signaler disparue"}</button>` : ""}
+            ${canEdit ? `<button class="btn secondary icon-btn reactive" data-action="key-edit" data-key-id="${item.id}" title="Éditer">✎</button>` : ""}
+            ${canDelete ? `<button class="btn danger icon-btn" data-action="key-delete" data-key-id="${item.id}" title="Supprimer">X</button>` : ""}
+          </div></div>
           ${item.description ? `<div class="muted">${escapeHtml(item.description)}</div>` : ""}
           ${item.remarque ? `<div class="muted">Remarque : ${escapeHtml(item.remarque)}</div>` : ""}
           ${item.purchase_date || item.warranty_end_date ? `<div class="muted">Date d'achat : ${escapeHtml(item.purchase_date || "—")} • Fin de garantie : ${escapeHtml(item.warranty_end_date || "—")}</div>` : ""}
