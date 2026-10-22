@@ -526,7 +526,7 @@ function buildNavLinks(role) {
   // Tu peux changer les routes plus tard. Pour l'instant: placeholders propres.
   if (isAdminRole(normalizedRole)) {
     const links = [
-      { label: "Clés", href: "./index.html" },
+      { label: isEquipmentCabinet() ? "Appareils" : "Clés", href: "./index.html" },
       { label: "Emprunts", href: "./loans.html" },
       { label: "Suggestions", href: "./suggestions.html", badge: Number(state.suggestionCount) || 0 },
       { label: "Comment utiliser Sésame", action: "tutorial" },
@@ -547,14 +547,14 @@ function buildNavLinks(role) {
   }
   if (normalizedRole === "consultant") {
     return [
-      { label: "Liste des clés", href: "./index.html" },
+      { label: isEquipmentCabinet() ? "Liste des appareils" : "Liste des clés", href: "./index.html" },
       { label: "Comment utiliser Sésame", action: "tutorial" },
       { label: "Déconnexion", action: "logout", danger: true },
     ];
   }
   // user
   return [
-    { label: "Liste des clés", href: "./index.html?mode=browse" },
+    { label: isEquipmentCabinet() ? "Liste des appareils" : "Liste des clés", href: "./index.html?mode=browse" },
     { label: `Mes emprunts (${Number(state.myOpenLoanCount) || 0})`, href: "./my-loans.html" },
     { label: "Comment utiliser Sésame", action: "tutorial" },
     { label: "Déconnexion", action: "logout", danger: true },
@@ -2391,7 +2391,7 @@ function updateCabinetHeaderForMode(mode) {
     setPageTitle(label);
     return;
   }
-  setPageTitle("Liste des clés");
+  setPageTitle(isEquipmentCabinet() ? "Liste des appareils" : "Liste des clés");
 }
 
 async function loadLoansForKeys() {
@@ -3164,10 +3164,21 @@ function syncAddItemsForm() {
   $("addItemsTitle").textContent = equipment ? "Ajouter un appareil" : "Ajouter des clés";
   $("addItemsSubtitle").textContent = equipment ? "Fiche d'appareil et informations Hector Collector" : "Import CSV ou ajout manuel";
   $("equipmentFields").hidden = !equipment;
+  $("tabCsv").hidden = equipment;
+  if (equipment) setTab("manual");
   ["m_hook", "m_keyno", "m_pavilion_id", "m_local", "m_qty", "m_utilisation", "m_is_keyring"].forEach((id) => {
     const el = $(id);
     if (el) el.closest(".field, .checkline")?.toggleAttribute("hidden", equipment);
   });
+}
+
+function updateCabinetItemTerminology() {
+  const equipment = isEquipmentCabinet();
+  const setText = (id, text) => { if ($(id)) $(id).textContent = text; };
+  setText("pageTitleCenter", equipment ? "Liste des appareils" : "Liste des clés");
+  setText("btnAddKeys", equipment ? "Ajouter un appareil" : "Ajouter des clés");
+  setText("tabAllKeys", equipment ? "Tous les appareils" : "Toutes les clés");
+  if ($("q")) $("q").placeholder = equipment ? "Recherche (inventaire, marque, modèle, description, tags)." : "Recherche (local, clé, trousseau, crochet).";
 }
 
 function firstHectorValue(...values) {
@@ -3557,6 +3568,7 @@ async function refreshAfterAction() {
 
 
 function render() {
+  updateCabinetItemTerminology();
   renderKeyViewTabs();
   if (state.keysTab === "favorites") {
     renderFavorites();
