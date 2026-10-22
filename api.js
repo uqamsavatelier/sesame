@@ -606,9 +606,9 @@ export async function listKeysByCabinet(cabinetId) {
 export async function listDevicesByCabinet(cabinetId) {
   const { data, error } = await supa
     .from("devices")
-    .select("id,cabinet_id,inventory_number,brand,model,purchase_date,warranty_end_date,description,accessories,remarque,tags,is_missing,updated_at")
+    .select("id,cabinet_id,slot_code,inventory_number,brand,model,purchase_date,warranty_end_date,description,accessories,remarque,tags,is_missing,updated_at")
     .eq("cabinet_id", cabinetId)
-    .order("brand", { ascending: true, nullsFirst: true })
+    .order("slot_code", { ascending: true, nullsFirst: true })
     .order("model", { ascending: true, nullsFirst: true })
     .order("inventory_number", { ascending: true });
   if (error) throw error;

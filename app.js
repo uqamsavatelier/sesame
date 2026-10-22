@@ -2854,7 +2854,7 @@ function renderEquipmentDetailModal(deviceId = null) {
     const photos = state.equipmentPhotosByKey.get(item.id) ?? [];
     const accessories = renderEquipmentAccessories(item.accessories);
     const tags = parseKeyTags(item.tags);
-    const title = [[item.brand, item.model].filter(Boolean).join(" "), item.inventory_number || `Appareil ${item.id}`].filter(Boolean).join(" · ");
+    const title = [item.slot_code, [item.brand, item.model].filter(Boolean).join(" "), item.inventory_number || `Appareil ${item.id}`].filter(Boolean).join(" · ");
     const loanAction = loan ? "key-return" : (canAdminLend ? "key-admin-loan" : "key-borrow");
     const loanLabel = loan ? "Retourner" : (canAdminLend ? "Prêter" : "Emprunter");
     const canLoan = loan ? canReturn : (canSelfBorrow || canAdminLend);
@@ -3280,6 +3280,7 @@ function renderEditModal(keyId) {
   $("keyEditFields").style.display = equipment ? "none" : "";
   $("equipmentEditFields").style.display = equipment ? "" : "none";
   if (equipment) {
+    $("edit_equipment_slot_code").value = key.slot_code ?? "";
     $("edit_equipment_inventory").value = key.inventory_number ?? key.key_no ?? "";
     $("edit_equipment_brand").value = key.brand ?? "";
     $("edit_equipment_model").value = key.model ?? "";
@@ -3796,13 +3797,13 @@ function render() {
   if (isEquipmentCabinet()) {
     const q = normalizeText(state.q);
     const items = state.keys.filter((item) => normalizeText([
-      item.inventory_number, item.brand, item.model, item.description,
+      item.slot_code, item.inventory_number, item.brand, item.model, item.description,
       item.accessories, parseKeyTags(item.tags).join(" "), item.remarque,
     ].join(" ")).includes(q));
     const lines = items.map((item) => ({
       key_id: item.id,
-      text: item.inventory_number || `Appareil ${item.id}`,
-      html: escapeHtml([[item.brand, item.model].filter(Boolean).join(" "), item.inventory_number || `Appareil ${item.id}`].filter(Boolean).join(" · ")),
+      text: item.slot_code || item.inventory_number || `Appareil ${item.id}`,
+      html: escapeHtml([item.slot_code, [item.brand, item.model].filter(Boolean).join(" "), item.inventory_number || `Appareil ${item.id}`].filter(Boolean).join(" · ")),
       details: [
         item.description ? escapeHtml(item.description) : "",
       ].filter(Boolean),
@@ -4589,11 +4590,13 @@ $("m_is_keyring").addEventListener("change", (e) => {
     setManualStatus("Ajout en cours...");
 
     if (isEquipmentCabinet()) {
-      const inventory_number = $("m_inventory_number").value.trim();
-      if (!inventory_number) throw new Error("Le numéro d'inventaire / SAV est requis.");
+       const slot_code = $("m_slot_code").value.trim().toUpperCase();
+       if (!/^[A-Z]+[0-9]{2}$/.test(slot_code)) throw new Error("Le code d'emplacement doit être du type A01 ou B07.");
+       const inventory_number = $("m_inventory_number").value.trim();
       const tags = getEquipmentTags();
       const { data: createdEquipment, error } = await supa.from("devices").insert({
         cabinet_id: Number(state.cabinetId),
+        slot_code,
         inventory_number,
         brand: $("m_brand").value.trim() || null,
         model: $("m_model").value.trim() || null,
@@ -4613,7 +4616,7 @@ $("m_is_keyring").addEventListener("change", (e) => {
       setManualStatus("Appareil ajouté", 5000);
       await loadDataForCabinet();
       render();
-      ["m_inventory_number", "m_brand", "m_model", "m_purchase_date", "m_warranty_end_date", "m_description", "m_equipment_remarque", "m_tags", "m_remarque", "m_equipment_photos"].forEach((id) => { if ($(id)) $(id).value = ""; });
+      ["m_slot_code", "m_inventory_number", "m_brand", "m_model", "m_purchase_date", "m_warranty_end_date", "m_description", "m_equipment_remarque", "m_tags", "m_remarque", "m_equipment_photos"].forEach((id) => { if ($(id)) $(id).value = ""; });
       resetEquipmentAccessoryRows();
       resetEquipmentTagRows();
       return;
@@ -4980,7 +4983,10 @@ $("m_is_keyring").addEventListener("change", (e) => {
 
       if (isEquipmentCabinet()) {
         const tags = parseKeyTags($("edit_tags")._tags);
+        const slotCode = $("edit_equipment_slot_code").value.trim().toUpperCase();
+        if (!/^[A-Z]+[0-9]{2}$/.test(slotCode)) throw new Error("Le code d'emplacement doit être du type A01 ou B07.");
         const { error } = await supa.from("devices").update({
+          slot_code: slotCode,
           brand: $("edit_equipment_brand").value.trim() || null,
           model: $("edit_equipment_model").value.trim() || null,
           purchase_date: $("edit_equipment_purchase").value || null,
