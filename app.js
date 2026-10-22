@@ -4594,7 +4594,7 @@ $("m_is_keyring").addEventListener("change", (e) => {
        if (!/^[A-Z]+[0-9]{2}$/.test(slot_code)) throw new Error("Le code d'emplacement doit être du type A01 ou B07.");
        const inventory_number = $("m_inventory_number").value.trim();
       const tags = getEquipmentTags();
-      const { data: createdEquipment, error } = await supa.from("devices").insert({
+      const equipmentPayload = {
         cabinet_id: Number(state.cabinetId),
         slot_code,
         inventory_number,
@@ -4606,7 +4606,12 @@ $("m_is_keyring").addEventListener("change", (e) => {
         accessories: getEquipmentAccessories().join("\n") || null,
         remarque: $("m_equipment_remarque").value.trim() || null,
         tags,
-      }).select("id").single();
+      };
+      let { data: createdEquipment, error } = await supa.from("devices").insert(equipmentPayload).select("id").single();
+      if (error && /slot_code.*does not exist|column .*slot_code/i.test(String(error.message ?? ""))) {
+        const { slot_code: unusedSlotCode, ...legacyEquipmentPayload } = equipmentPayload;
+        ({ data: createdEquipment, error } = await supa.from("devices").insert(legacyEquipmentPayload).select("id").single());
+      }
       if (error) throw error;
       const photoFiles = [...($("m_equipment_photos")?.files ?? [])];
       if (photoFiles.length) {
