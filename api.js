@@ -603,6 +603,18 @@ export async function listKeysByCabinet(cabinetId) {
   return data ?? [];
 }
 
+export async function listDevicesByCabinet(cabinetId) {
+  const { data, error } = await supa
+    .from("devices")
+    .select("id,cabinet_id,inventory_number,brand,model,purchase_date,warranty_end_date,description,accessories,remarque,tags,is_missing,updated_at")
+    .eq("cabinet_id", cabinetId)
+    .order("brand", { ascending: true, nullsFirst: true })
+    .order("model", { ascending: true, nullsFirst: true })
+    .order("inventory_number", { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
 
 export async function listKeyringsByCabinet(cabinetId) {
   const { data, error } = await supa
@@ -637,6 +649,18 @@ export async function listOpenLoansByKeyIds(keyIds) {
     error = result.error;
     if (!/borrower_name/i.test(String(result.error?.message ?? ""))) break;
   }
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function listOpenLoansByDeviceIds(deviceIds) {
+  const ids = (deviceIds ?? []).map(Number).filter(Number.isFinite);
+  if (!ids.length) return [];
+  const { data, error } = await supa
+    .from("loans")
+    .select("id,device_id,borrower_id,borrower_name,loaned_at,returned_at,note")
+    .in("device_id", ids)
+    .is("returned_at", null);
   if (error) throw error;
   return data ?? [];
 }
@@ -737,6 +761,18 @@ export async function listMissingByKeyIds(keyIds) {
     .select("key_id,reported_at,reported_by")
     .in("key_id", keyIds)
     .is("found_at", null);
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function listMissingByDeviceIds(deviceIds) {
+  const ids = (deviceIds ?? []).map(Number).filter(Number.isFinite);
+  if (!ids.length) return [];
+  const { data, error } = await supa.from("devices_missing")
+    .select("id,device_id,reported_at,reported_by,found_at,found_by")
+    .in("device_id", ids)
+    .is("found_at", null)
+    .order("reported_at", { ascending: false });
   if (error) throw error;
   return data ?? [];
 }
@@ -870,6 +906,33 @@ export async function fnReportFound(key_id) {
     source: "frontend",
   });
   return out;
+}
+
+export async function fnDeviceLoanCreate(device_id, note = null) {
+  return callFunctionRaw("loan-create", { device_id, note });
+}
+
+export async function fnDeviceLoanReturnById(device_id) {
+  return callFunctionRaw("loan-return-any", { device_id });
+}
+
+export async function fnDeviceReportMissing(device_id) {
+  return callFunctionRaw("key-report-missing", { device_id });
+}
+
+export async function fnDeviceReportFound(device_id) {
+  return callFunctionRaw("key-report-found", { device_id });
+}
+
+export async function rpcAdminCreateDeviceLoan({ device_id, borrower_id = null, borrower_name = null, note = null }) {
+  const { data, error } = await supa.rpc("admin_create_device_loan", {
+    p_device_id: Number(device_id),
+    p_borrower_id: borrower_id || null,
+    p_borrower_name: borrower_name || null,
+    p_note: note || null,
+  });
+  if (error) throw error;
+  return data;
 }
 
 
@@ -1075,8 +1138,8 @@ export async function lookupHectorInventory(inventory) {
 
 const EQUIPMENT_PHOTOS_BUCKET = "equipment-photos";
 
-export async function uploadEquipmentPhotos(keyId, files) {
-  const id = Number(keyId);
+export async function uploadEquipmentPhotos(deviceId, files) {
+  const id = Number(deviceId);
   if (!Number.isFinite(id) || !files?.length) return [];
   const uploaded = [];
   for (const file of files) {
@@ -1090,11 +1153,11 @@ export async function uploadEquipmentPhotos(keyId, files) {
     });
     if (uploadError) throw uploadError;
     const { data, error } = await supa.from("equipment_photos").insert({
-      key_id: id,
+      device_id: id,
       storage_path: path,
       original_name: file.name,
       mime_type: file.type,
-    }).select("id,key_id,storage_path,original_name,mime_type,created_at").single();
+    }).select("id,device_id,storage_path,original_name,mime_type,created_at").single();
     if (error) {
       await supa.storage.from(EQUIPMENT_PHOTOS_BUCKET).remove([path]);
       throw error;
@@ -1104,12 +1167,12 @@ export async function uploadEquipmentPhotos(keyId, files) {
   return uploaded;
 }
 
-export async function listEquipmentPhotosByKeyIds(keyIds) {
-  const ids = (keyIds ?? []).map(Number).filter(Number.isFinite);
+export async function listEquipmentPhotosByDeviceIds(deviceIds) {
+  const ids = (deviceIds ?? []).map(Number).filter(Number.isFinite);
   if (!ids.length) return [];
   const { data, error } = await supa.from("equipment_photos")
-    .select("id,key_id,storage_path,original_name,mime_type,created_at")
-    .in("key_id", ids)
+    .select("id,device_id,storage_path,original_name,mime_type,created_at")
+    .in("device_id", ids)
     .order("created_at", { ascending: true });
   if (error) throw error;
   const rows = [];

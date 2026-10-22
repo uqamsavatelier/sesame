@@ -6,17 +6,24 @@ import {
   listCabinets,
   listPavilions,
   listKeysByCabinet,
+  listDevicesByCabinet,
   listKeyringsByCabinet,
   listOpenLoansByKeyIds,
+  listOpenLoansByDeviceIds,
   listProfilesByIds,
   listUserProfiles,
   listMissingByKeyIds,
+  listMissingByDeviceIds,
   fnLoanCreateKeyring,
   fnLoanReturnKeyring,
   fnLoanCreate,
   fnLoanReturn,
   fnReportMissing,
   fnReportFound,
+  fnDeviceLoanCreate,
+  fnDeviceLoanReturnById,
+  fnDeviceReportMissing,
+  fnDeviceReportFound,
   fnImportKeysCsv,
   createKeySuggestion,
   createCabinet,
@@ -34,10 +41,11 @@ import {
   countOpenLoansByBorrower,
   listLoansByBorrower,
   rpcAdminCreateLoan,
+  rpcAdminCreateDeviceLoan,
   rpcAdminCreateKeyringLoan,
   lookupHectorInventory,
   uploadEquipmentPhotos,
-  listEquipmentPhotosByKeyIds,
+  listEquipmentPhotosByDeviceIds,
   deleteEquipmentPhoto,
 } from "./api.js?v=20261022a";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks, logAuditEvent } from "./audit.js";
@@ -1397,7 +1405,7 @@ async function saveAddedTags(kind, entity, tags) {
 }
 
 function openTagDialog(kind, id, draftTags = null, onChange = null) {
-  const entity = kind === 'key' ? state.keys.find(k => k.id === id)
+  const entity = kind === 'key' || kind === 'device' ? state.keys.find(k => k.id === id)
     : kind === 'keyring' ? state.keyrings.find(k => k.id === id) : null;
   if (kind && !entity) return;
   let tags = parseKeyTags(draftTags ?? entity?.tags);
@@ -1409,7 +1417,7 @@ function openTagDialog(kind, id, draftTags = null, onChange = null) {
     <form class="tag-add-form"><label>Ajouter un tag<input class="input" name="tag" maxlength="80" required placeholder="Ex. Archambault" autocomplete="off" /></label><button class="btn" type="submit">Ajouter</button></form>
     <p class="tag-current"></p><p class="muted tag-status" role="status"></p>`;
   dialog.querySelector('.tag-target').textContent = entity
-    ? (kind === 'key' ? (isEquipmentCabinet() ? `Appareil ${entity.inventory_number ?? entity.id}` : `Clé ${formatKeyTag(entity)}`) : `Trousseau ${entity.ring_code ?? ''}${entity.name ? ' — ' + entity.name : ''}`)
+     ? (kind === 'device' ? `Appareil ${entity.inventory_number ?? entity.id}` : kind === 'key' ? (isEquipmentCabinet() ? `Appareil ${entity.inventory_number ?? entity.id}` : `Clé ${formatKeyTag(entity)}`) : `Trousseau ${entity.ring_code ?? ''}${entity.name ? ' — ' + entity.name : ''}`)
     : 'Les tags seront enregistrés avec les modifications.';
   const update = () => { dialog.querySelector('.tag-current').textContent = `Tags actuels : ${tags.join(', ') || 'Aucun tag'}`; };
   update();
@@ -2362,15 +2370,15 @@ async function loadDataForCabinet() {
   const cid = state.cabinetId; // bigint (id numerique) selon ta DB actuelle
   state.pavilions = await listPavilions();
   renderPavilionSelects();
-  state.keys = await listKeysByCabinet(cid);
+  state.keys = isEquipmentCabinet() ? await listDevicesByCabinet(cid) : await listKeysByCabinet(cid);
   let equipmentPhotos = [];
-  try { equipmentPhotos = await listEquipmentPhotosByKeyIds(state.keys.map((item) => item.id)); } catch (error) {
+    try { equipmentPhotos = await listEquipmentPhotosByDeviceIds(state.keys.map((item) => item.id)); } catch (error) {
     console.warn("Photos d'appareils indisponibles avant migration Storage.", error?.message ?? error);
   }
   state.equipmentPhotosByKey = new Map();
   for (const photo of equipmentPhotos) {
-    if (!state.equipmentPhotosByKey.has(photo.key_id)) state.equipmentPhotosByKey.set(photo.key_id, []);
-    state.equipmentPhotosByKey.get(photo.key_id).push(photo);
+    if (!state.equipmentPhotosByKey.has(photo.device_id)) state.equipmentPhotosByKey.set(photo.device_id, []);
+    state.equipmentPhotosByKey.get(photo.device_id).push(photo);
   }
   state.keyrings = await listKeyringsByCabinet(cid);
 
@@ -2409,18 +2417,20 @@ function updateCabinetHeaderForMode(mode) {
 }
 
 async function loadLoansForKeys() {
-  const keyIds = state.keys.map(k => k.id);
-  if (!keyIds.length) {
+  const itemIds = state.keys.map(k => k.id);
+  if (!itemIds.length) {
     state.loansByKey = new Map();
     state.borrowersById = new Map();
     return;
   }
 
-  const loans = await listOpenLoansByKeyIds(keyIds);
+  const loans = isEquipmentCabinet()
+    ? await listOpenLoansByDeviceIds(itemIds)
+    : await listOpenLoansByKeyIds(itemIds);
   const loansByKey = new Map();
   const borrowerIds = new Set();
   for (const l of loans) {
-    loansByKey.set(l.key_id, l);
+    loansByKey.set(isEquipmentCabinet() ? l.device_id : l.key_id, l);
     if (l.borrower_id) borrowerIds.add(l.borrower_id);
   }
 
@@ -2632,14 +2642,14 @@ async function loadMissingForKeys() {
     state.missingByKey = new Map();
     return;
   }
-  const rows = await listMissingByKeyIds(keyIds);
+  const rows = isEquipmentCabinet() ? await listMissingByDeviceIds(keyIds) : await listMissingByKeyIds(keyIds);
   const reporterIds = [...new Set(rows.map(r => r.reported_by).filter(Boolean))];
   const reporterProfiles = await listProfilesByIds(reporterIds);
   const reportersById = new Map(reporterProfiles.map(p => [p.id, p.display_name ?? ""]));
   const missingByKey = new Map();
   for (const r of rows) {
     const name = reportersById.get(r.reported_by) ?? "";
-    missingByKey.set(r.key_id, {
+    missingByKey.set(isEquipmentCabinet() ? r.device_id : r.key_id, {
       reported_at: r.reported_at,
       reported_by: r.reported_by,
       reported_by_name: name,
@@ -2730,7 +2740,7 @@ async function fnLoanReturnByKeyLocal(key_id) {
 async function fnLoanReturnAny({ loan_id, key_id }) {
   const body = {};
   if (Number.isFinite(loan_id)) body.loan_id = loan_id;
-  else if (Number.isFinite(key_id)) body.key_id = key_id;
+  else if (Number.isFinite(key_id)) body[isEquipmentCabinet() ? "device_id" : "key_id"] = key_id;
   else throw new Error("Identifiant d'emprunt introuvable.");
   const { data, error } = await supa.functions.invoke("loan-return-any", { body });
   if (error) throw error;
@@ -3712,7 +3722,7 @@ async function openAdminLoanModal({ mode, keyId = null, keyringId = null } = {})
   await ensureAdminLoanUsersLoaded();
   const wasOpen = state.adminLoanModal.open;
   state.adminLoanModal.open = true;
-  state.adminLoanModal.mode = mode === "keyring" ? "keyring" : "key";
+  state.adminLoanModal.mode = mode === "keyring" ? "keyring" : (mode === "device" ? "device" : "key");
   state.adminLoanModal.keyId = Number.isFinite(Number(keyId)) ? Number(keyId) : null;
   state.adminLoanModal.keyringId = Number.isFinite(Number(keyringId)) ? Number(keyringId) : null;
 
@@ -4550,11 +4560,8 @@ $("m_is_keyring").addEventListener("change", (e) => {
       const inventory_number = $("m_inventory_number").value.trim();
       if (!inventory_number) throw new Error("Le numéro d'inventaire / SAV est requis.");
       const tags = getEquipmentTags();
-      const { data: createdEquipment, error } = await supa.from("keys").insert({
-        key_code: crypto.randomUUID(),
+      const { data: createdEquipment, error } = await supa.from("devices").insert({
         cabinet_id: Number(state.cabinetId),
-        hook_no: null,
-        key_no: inventory_number,
         inventory_number,
         brand: $("m_brand").value.trim() || null,
         model: $("m_model").value.trim() || null,
@@ -4746,7 +4753,7 @@ $("m_is_keyring").addEventListener("change", (e) => {
       btn.disabled = true;
 
       if (action === "key-tags" || action === "keyring-tags") {
-        openTagDialog(action === "key-tags" ? "key" : "keyring", action === "key-tags" ? keyId : keyringId);
+        openTagDialog(action === "key-tags" ? (isEquipmentCabinet() ? "device" : "key") : "keyring", action === "key-tags" ? keyId : keyringId);
         return;
       }
       if (action === "keyring-borrow") {
@@ -4797,10 +4804,11 @@ $("m_is_keyring").addEventListener("change", (e) => {
         });
       } else if (action === "key-borrow") {
         if (!canSelfBorrowCabinet()) throw new Error("Permission refusée: emprunt.");
-        await fnLoanCreate(keyId);
+        if (isEquipmentCabinet()) await fnDeviceLoanCreate(keyId);
+        else await fnLoanCreate(keyId);
       } else if (action === "key-admin-loan") {
         if (!canAdminLendCabinet()) throw new Error("Permission refusée: prêt administrateur.");
-        await openAdminLoanModal({ mode: "key", keyId });
+        await openAdminLoanModal({ mode: isEquipmentCabinet() ? "device" : "key", keyId });
       } else if (action === "key-return") {
         if (!canCabinetAction("retour")) throw new Error("Permission refusée: retour.");
         const loan = state.loansByKey?.get(keyId);
@@ -4818,7 +4826,8 @@ $("m_is_keyring").addEventListener("change", (e) => {
           if (Number.isFinite(loanId) && loanId > 0) {
             await fnLoanReturn(loanId);
           } else {
-            await fnLoanReturnByKeyLocal(keyId);
+            if (isEquipmentCabinet()) await fnDeviceLoanReturnById(keyId);
+            else await fnLoanReturnByKeyLocal(keyId);
           }
         } catch (err) {
           if (isForbiddenError(err)) {
@@ -4868,16 +4877,25 @@ $("m_is_keyring").addEventListener("change", (e) => {
             return;
           }
         }
-        await fnReportMissing(keyId);
+        if (isEquipmentCabinet()) await fnDeviceReportMissing(keyId);
+        else await fnReportMissing(keyId);
       } else if (action === "key-found") {
         if (!canRole("signalement")) throw new Error("Permission refusée: signalement.");
-        await fnReportFound(keyId);
+        if (isEquipmentCabinet()) await fnDeviceReportFound(keyId);
+        else await fnReportFound(keyId);
       } else if (action === "key-edit") {
         if (!canCabinetAction("edition")) throw new Error("Permission refusée: édition.");
         openEditModal(keyId);
         return;
       } else if (action === "key-delete") {
         if (!canCabinetAction("suppression")) throw new Error("Permission refusée: suppression.");
+        if (isEquipmentCabinet()) {
+          if (!confirm("Supprimer cet appareil ?")) return;
+          const { error } = await supa.from("devices").delete().eq("id", keyId);
+          if (error) throw error;
+          await refreshAfterAction();
+          return;
+        }
         const key = state.keys.find(k => k.id === keyId);
         if (key?.keyring_id) {
           openKeyInRingModal(keyId);
@@ -4930,7 +4948,7 @@ $("m_is_keyring").addEventListener("change", (e) => {
 
       if (isEquipmentCabinet()) {
         const tags = parseKeyTags($("edit_tags")._tags);
-        const { error } = await supa.from("keys").update({
+        const { error } = await supa.from("devices").update({
           brand: $("edit_equipment_brand").value.trim() || null,
           model: $("edit_equipment_model").value.trim() || null,
           purchase_date: $("edit_equipment_purchase").value || null,
@@ -5449,12 +5467,15 @@ $("m_is_keyring").addEventListener("change", (e) => {
           },
         });
         if (error) throw error;
-        await fnReportMissing(keyId);
+         if (isEquipmentCabinet()) await fnDeviceReportMissing(keyId);
+         else await fnReportMissing(keyId);
       } else if (state.missingPrompt.mode === "key") {
         const loanId = state.missingPrompt.loanId;
         if (Number.isFinite(loanId) && loanId > 0) await fnLoanReturn(loanId);
-        else await fnLoanReturnByKeyLocal(keyId);
-        await fnReportMissing(keyId);
+         else if (isEquipmentCabinet()) await fnDeviceLoanReturnById(keyId);
+         else await fnLoanReturnByKeyLocal(keyId);
+         if (isEquipmentCabinet()) await fnDeviceReportMissing(keyId);
+         else await fnReportMissing(keyId);
       }
 
       await refreshAfterAction();
@@ -5596,7 +5617,8 @@ $("m_is_keyring").addEventListener("change", (e) => {
       if (canAdminLendCabinet()) {
         await openAdminLoanModal({ mode: "key", keyId });
       } else {
-        await fnLoanCreate(keyId);
+        if (isEquipmentCabinet()) await fnDeviceLoanCreate(keyId);
+        else await fnLoanCreate(keyId);
         await refreshAfterAction();
       }
     } catch (e) {
@@ -5747,13 +5769,17 @@ $("m_is_keyring").addEventListener("change", (e) => {
           note,
         });
       } else {
-        if (!Number.isFinite(Number(state.adminLoanModal.keyId))) throw new Error("Clé introuvable.");
-        await rpcAdminCreateLoan({
-          key_id: state.adminLoanModal.keyId,
+        if (!Number.isFinite(Number(state.adminLoanModal.keyId))) throw new Error("Élément introuvable.");
+        const payload = {
           borrower_id: borrowerId || null,
           borrower_name: borrowerId ? null : borrowerName,
           note,
-        });
+        };
+        if (state.adminLoanModal.mode === "device") {
+          await rpcAdminCreateDeviceLoan({ device_id: state.adminLoanModal.keyId, ...payload });
+        } else {
+          await rpcAdminCreateLoan({ key_id: state.adminLoanModal.keyId, ...payload });
+        }
       }
 
       await refreshAfterAction();
