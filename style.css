@@ -2305,3 +2305,14 @@ body[data-theme="light"] .seg-label{
 .equipment-detail-row{align-items:flex-start}
 .equipment-detail-tags{margin-top:6px}
 .tag-chip{display:inline-block;padding:2px 7px;border-radius:999px;background:var(--panel-2);border:1px solid var(--border);font-size:12px}
+.equipment-edit-photo-list{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.equipment-edit-photo{display:flex;flex-direction:column;gap:5px;align-items:flex-start}
+.equipment-edit-photo img{width:110px;height:82px;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
+.equipment-detail-media{display:flex;gap:18px;align-items:flex-start;margin-top:8px}
+.equipment-detail-accessories{flex:1;min-width:0}
+.equipment-detail-media .equipment-photo-strip{flex:0 0 330px;margin-top:0}
+.equipment-detail-media .equipment-photo-strip img{width:320px;height:230px;object-fit:contain;background:var(--panel-2)}
+.equipment-dialog-rows{display:grid;gap:8px;margin-top:14px}
+.equipment-dialog-row{display:flex;gap:8px;align-items:center}
+.equipment-dialog-row .input{flex:1}
+.equipment-accessories-dialog{width:min(620px,calc(100vw - 32px));border:1px solid var(--border);border-radius:14px;padding:18px;background:var(--panel);color:var(--text)}

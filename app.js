@@ -39,7 +39,7 @@ import {
   uploadEquipmentPhotos,
   listEquipmentPhotosByKeyIds,
   deleteEquipmentPhoto,
-} from "./api.js?v=20261021h";
+} from "./api.js?v=20261022a";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks, logAuditEvent } from "./audit.js";
 
 
@@ -994,6 +994,7 @@ let state = {
   editModal: {
     open: false,
     keyId: null,
+    equipmentAccessories: [],
   },
   keyringEditModal: {
     open: false,
@@ -2854,9 +2855,8 @@ function renderEquipmentDetailModal() {
           ${item.description ? `<div class="muted">${escapeHtml(item.description)}</div>` : ""}
           ${item.remarque ? `<div class="muted">Remarque : ${escapeHtml(item.remarque)}</div>` : ""}
           ${item.purchase_date || item.warranty_end_date ? `<div class="muted">Date d'achat : ${escapeHtml(item.purchase_date || "—")} • Fin de garantie : ${escapeHtml(item.warranty_end_date || "—")}</div>` : ""}
-          ${accessories}
+          <div class="equipment-detail-media"><div class="equipment-detail-accessories">${accessories || `<div class="muted">Aucun accessoire</div>`}</div>${photoHtml}</div>
           ${tagHtml}
-          ${photoHtml}
           ${loanHtml}
         </div>
         <div class="key-actions">
@@ -3192,10 +3192,10 @@ function getCurrentKeyringIdForKey(keyId) {
 }
 
 function renderEditEquipmentAccessories(value) {
-  const host = $("editEquipmentAccessoryRows");
-  if (!host) return;
-  host.innerHTML = "";
-  String(value ?? "").split(/\r?\n/).map((item) => item.trim()).filter(Boolean).forEach((item) => addEditEquipmentAccessoryRow(item));
+  const accessories = String(value ?? "").split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+  state.editModal.equipmentAccessories = accessories;
+  const summary = $("editEquipmentAccessoriesSummary");
+  if (summary) summary.textContent = `Accessoires actuels : ${accessories.join(", ") || "Aucun"}`;
 }
 
 function addEditEquipmentAccessoryRow(value = "") {
@@ -3208,8 +3208,30 @@ function addEditEquipmentAccessoryRow(value = "") {
 }
 
 function getEditEquipmentAccessories() {
-  return [...document.querySelectorAll("#editEquipmentAccessoryRows .edit-equipment-accessory")]
-    .map((input) => input.value.trim()).filter(Boolean).join("\n");
+  return (state.editModal.equipmentAccessories ?? []).join("\n");
+}
+
+function openEquipmentAccessoriesDialog() {
+  const dialog = document.createElement("dialog");
+  dialog.className = "equipment-accessories-dialog";
+  const render = () => {
+    const values = state.editModal.equipmentAccessories ?? [];
+    dialog.innerHTML = `<div class="hook-modal-head"><div><div class="title">Accessoires</div><div class="muted">Ajouter, modifier ou retirer les accessoires</div></div><button type="button" class="btn secondary accessory-dialog-close">Fermer</button></div><div class="equipment-dialog-rows">${values.map((value, index) => `<div class="equipment-dialog-row"><input class="input equipment-dialog-accessory" value="${escapeHtml(value)}" placeholder="Ex. Câble BNC" /><button type="button" class="btn danger equipment-dialog-remove" data-index="${index}">Retirer</button></div>`).join("")}</div><div class="row" style="margin-top:10px;"><button type="button" class="btn secondary accessory-dialog-add">Ajouter</button><div class="spacer"></div><button type="button" class="btn accessory-dialog-save">Enregistrer</button></div>`;
+    dialog.querySelector(".accessory-dialog-close").onclick = () => dialog.close();
+    dialog.querySelector(".accessory-dialog-add").onclick = () => { values.push(""); render(); dialog.querySelectorAll(".equipment-dialog-accessory")[values.length - 1]?.focus(); };
+    dialog.querySelectorAll(".equipment-dialog-remove").forEach((button) => {
+      button.onclick = () => { values.splice(Number(button.dataset.index), 1); render(); };
+    });
+    dialog.querySelector(".accessory-dialog-save").onclick = () => {
+      state.editModal.equipmentAccessories = [...dialog.querySelectorAll(".equipment-dialog-accessory")].map((input) => input.value.trim()).filter(Boolean);
+      renderEditEquipmentAccessories(state.editModal.equipmentAccessories.join("\n"));
+      dialog.close();
+    };
+  };
+  render();
+  dialog.addEventListener("close", () => dialog.remove(), { once: true });
+  document.body.append(dialog);
+  dialog.showModal();
 }
 
 function renderEditEquipmentPhotos(keyId) {
@@ -4877,9 +4899,7 @@ $("m_is_keyring").addEventListener("change", (e) => {
   $("editCancel").addEventListener("click", closeEditModal);
   $("editOverlay").addEventListener("click", closeEditModal);
   $("btnAddEditEquipmentAccessory")?.addEventListener("click", () => addEditEquipmentAccessoryRow());
-  $("editEquipmentAccessoryRows")?.addEventListener("click", (event) => {
-    if (event.target.closest(".edit-equipment-accessory-remove")) event.target.closest(".equipment-accessory-row")?.remove();
-  });
+  $("btnAddEditEquipmentAccessory")?.addEventListener("click", openEquipmentAccessoriesDialog);
   $("editEquipmentPhotoList")?.addEventListener("click", async (event) => {
     const button = event.target.closest(".equipment-photo-remove");
     if (!button) return;
