@@ -2832,21 +2832,24 @@ function updateSelectionUI() {
   if (btnRemove) btnRemove.style.display = state.hookModal.selectMode && selectedWith.length ? "" : "none";
 }
 
-function renderEquipmentDetailModal() {
+function renderEquipmentDetailModal(deviceId = null) {
   const canReturn = canCabinetAction("retour");
   const canDelete = canCabinetAction("suppression");
   const canSignal = canRole("signalement");
   const canEdit = canAdministrateCurrentCabinet() && canCabinetAction("edition");
   const canAdminLend = canAdminLendCabinet();
   const canSelfBorrow = canSelfBorrowCabinet();
-  $("hookModalTitle").textContent = "Appareils / équipements";
+  $("hookModalTitle").textContent = deviceId == null ? "Appareils / équipements" : "Appareil / équipement";
   $("hookModalSub").textContent = "";
   $("hookModalActions").style.display = "none";
   const container = $("hookModalContent");
   container.innerHTML = `<div class="hook-section"><div class="hook-list" id="equipmentDetailList"></div></div>`;
   const list = $("equipmentDetailList");
 
-  for (const item of state.keys) {
+  const equipmentItems = deviceId == null
+    ? state.keys
+    : state.keys.filter((item) => Number(item.id) === Number(deviceId));
+  for (const item of equipmentItems) {
     const loan = state.loansByKey?.get(item.id);
     const photos = state.equipmentPhotosByKey.get(item.id) ?? [];
     const accessories = renderEquipmentAccessories(item.accessories);
@@ -2878,6 +2881,17 @@ function renderEquipmentDetailModal() {
       </div>
     `);
   }
+}
+
+function openEquipmentDetailModal(deviceId) {
+  const id = Number(deviceId);
+  if (!Number.isFinite(id)) return;
+  const wasOpen = state.hookModal.open;
+  state.hookModal.open = true;
+  state.hookModal.hookNo = "equipment";
+  renderEquipmentDetailModal(id);
+  setHookModalOpen(true);
+  openTrackedModal("hook", wasOpen);
 }
 
 function renderHookModal(hookNo) {
@@ -4450,6 +4464,10 @@ $("tabManual").addEventListener("click", () => setTab("manual"));
 
     const hookNo = item.dataset.hookNo === "equipment" ? "equipment" : Number(item.dataset.hookNo);
     if (hookNo !== "equipment" && !Number.isFinite(hookNo)) return;
+    if (hookNo === "equipment" && item.dataset.deviceId) {
+      openEquipmentDetailModal(item.dataset.deviceId);
+      return;
+    }
     openHookModal(hookNo);
   });
 

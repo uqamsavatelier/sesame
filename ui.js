@@ -56,7 +56,7 @@ export function renderHookCard({ hookNo, keyLines, keyrings, role }) {
       <div class="equipment-list-stack">
         <div class="equipment-list-heading">Appareils / équipements</div>
         ${keyLines.map((line) => `
-          <div class="item equipment-list-item" data-hook-no="equipment">
+          <div class="item clickable equipment-list-item" data-hook-no="equipment" data-device-id="${escapeHtml(line.key_id)}">
             <div class="kgrid equipment-list-grid">${renderKeyLine(line)}</div>
           </div>
         `).join("")}
