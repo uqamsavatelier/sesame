@@ -2823,6 +2823,8 @@ function updateSelectionUI() {
 function renderEquipmentDetailModal() {
   const canReturn = canCabinetAction("retour");
   const canDelete = canCabinetAction("suppression");
+  const canSignal = canRole("signalement");
+  const canEdit = canAdministrateCurrentCabinet() && canCabinetAction("edition");
   const canAdminLend = canAdminLendCurrentCabinet();
   const canSelfBorrow = canSelfBorrowCabinet();
   $("hookModalTitle").textContent = "Fiche des appareils";
@@ -2836,7 +2838,7 @@ function renderEquipmentDetailModal() {
     const photos = state.equipmentPhotosByKey.get(item.id) ?? [];
     const accessories = renderEquipmentAccessories(item.accessories);
     const tags = parseKeyTags(item.tags);
-    const title = [item.brand, item.model, item.inventory_number || `Appareil ${item.id}`].filter(Boolean).join(" * ");
+    const title = [[item.brand, item.model].filter(Boolean).join(" "), item.inventory_number || `Appareil ${item.id}`].filter(Boolean).join(" | ");
     const loanAction = loan ? "key-return" : (canAdminLend ? "key-admin-loan" : "key-borrow");
     const loanLabel = loan ? "Retourner" : (canAdminLend ? "Prêter" : "Emprunter");
     const canLoan = loan ? canReturn : (canSelfBorrow || canAdminLend);
@@ -2858,6 +2860,8 @@ function renderEquipmentDetailModal() {
         <div class="key-actions">
           <button class="btn secondary icon-btn" data-action="key-tags" data-key-id="${item.id}" title="Tags de l'appareil" aria-label="Tags de l'appareil">${tagIcon()}</button>
           ${canLoan ? `<button class="btn reactive ${loan ? "btn-return" : "btn-borrow"}" data-action="${loanAction}" data-key-id="${item.id}" ${loan ? `data-loan-id="${loan.id}"` : ""}>${loanLabel}</button>` : ""}
+          ${canSignal ? `<button class="btn secondary reactive" data-action="${item.is_missing ? "key-found" : "key-missing"}" data-key-id="${item.id}">${item.is_missing ? "Signalée retrouvée" : "Signaler disparue"}</button>` : ""}
+          ${canEdit ? `<button class="btn secondary icon-btn reactive" data-action="key-edit" data-key-id="${item.id}" title="Éditer">✎</button>` : ""}
           ${canDelete ? `<button class="btn danger icon-btn" data-action="key-delete" data-key-id="${item.id}" title="Supprimer">X</button>` : ""}
         </div>
       </div>
@@ -3187,6 +3191,23 @@ function getCurrentKeyringIdForKey(keyId) {
 function renderEditModal(keyId) {
   const key = state.keys.find(k => k.id === keyId);
   if (!key) return;
+
+  const equipment = isEquipmentCabinet();
+  $("keyEditFields").hidden = equipment;
+  $("equipmentEditFields").hidden = !equipment;
+  if (equipment) {
+    $("edit_equipment_inventory").value = key.inventory_number ?? key.key_no ?? "";
+    $("edit_equipment_brand").value = key.brand ?? "";
+    $("edit_equipment_model").value = key.model ?? "";
+    $("edit_equipment_purchase").value = key.purchase_date ?? "";
+    $("edit_equipment_warranty").value = key.warranty_end_date ?? "";
+    $("edit_equipment_description").value = key.description ?? "";
+    $("edit_equipment_remarque").value = key.remarque ?? "";
+    $("edit_equipment_accessories").value = key.accessories ?? "";
+    renderTagEditor("edit_tags", key);
+    $("editStatus").textContent = "";
+    return;
+  }
 
   $("edit_hook_no").value = key.hook_no ?? "";
   $("edit_key_no").value = key.key_no ?? "";
@@ -3693,7 +3714,7 @@ function render() {
     const lines = items.map((item) => ({
       key_id: item.id,
       text: item.inventory_number || `Appareil ${item.id}`,
-      html: escapeHtml([item.brand, item.model, item.inventory_number || `Appareil ${item.id}`].filter(Boolean).join(" * ")),
+      html: escapeHtml([[item.brand, item.model].filter(Boolean).join(" "), item.inventory_number || `Appareil ${item.id}`].filter(Boolean).join(" | ")),
       details: [
         item.description ? escapeHtml(item.description) : "",
       ].filter(Boolean),
@@ -4340,8 +4361,8 @@ $("tabManual").addEventListener("click", () => setTab("manual"));
     if (!item) return;
     if (e.target.closest("button, a, input")) return;
 
-    const hookNo = Number(item.dataset.hookNo);
-    if (!Number.isFinite(hookNo)) return;
+    const hookNo = item.dataset.hookNo === "equipment" ? "equipment" : Number(item.dataset.hookNo);
+    if (hookNo !== "equipment" && !Number.isFinite(hookNo)) return;
     openHookModal(hookNo);
   });
 
@@ -4825,6 +4846,24 @@ $("m_is_keyring").addEventListener("change", (e) => {
     try {
       $("editSave").disabled = true;
       $("editStatus").textContent = "Enregistrement...";
+
+      if (isEquipmentCabinet()) {
+        const tags = parseKeyTags($("edit_tags")._tags);
+        const { error } = await supa.from("keys").update({
+          brand: $("edit_equipment_brand").value.trim() || null,
+          model: $("edit_equipment_model").value.trim() || null,
+          purchase_date: $("edit_equipment_purchase").value || null,
+          warranty_end_date: $("edit_equipment_warranty").value || null,
+          description: $("edit_equipment_description").value.trim() || null,
+          remarque: $("edit_equipment_remarque").value.trim() || null,
+          accessories: $("edit_equipment_accessories").value.trim() || null,
+          tags,
+        }).eq("id", keyId);
+        if (error) throw error;
+        closeEditModal();
+        await refreshAfterAction();
+        return;
+      }
 
     const hookNoRaw = $("edit_hook_no").value.trim();
     const hookNo = hookNoRaw ? Number(hookNoRaw) : null;

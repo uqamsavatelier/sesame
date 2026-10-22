@@ -517,7 +517,7 @@
     <button id="editClose" class="btn secondary reactive">Fermer</button>
   </div>
 
-  <div class="edit-grid">
+  <div id="keyEditFields" class="edit-grid">
     <label class="field">
       <div class="muted">No crochet</div>
       <input id="edit_hook_no" class="input" type="number" min="1" />
@@ -550,6 +550,17 @@
       <div class="muted">Trousseau</div>
       <select id="edit_keyring" class="select"></select>
     </label>
+  </div>
+
+  <div id="equipmentEditFields" class="edit-grid" hidden>
+    <label class="field"><div class="muted">No d'inventaire / SAV</div><input id="edit_equipment_inventory" class="input" disabled /></label>
+    <label class="field"><div class="muted">Marque</div><input id="edit_equipment_brand" class="input" /></label>
+    <label class="field"><div class="muted">Modèle</div><input id="edit_equipment_model" class="input" /></label>
+    <label class="field"><div class="muted">Date d'achat</div><input id="edit_equipment_purchase" class="input" type="date" /></label>
+    <label class="field"><div class="muted">Fin de garantie</div><input id="edit_equipment_warranty" class="input" type="date" /></label>
+    <label class="field"><div class="muted">Description</div><input id="edit_equipment_description" class="input" /></label>
+    <label class="field"><div class="muted">Remarque</div><input id="edit_equipment_remarque" class="input" /></label>
+    <label class="field"><div class="muted">Accessoires inclus (un par ligne)</div><textarea id="edit_equipment_accessories" class="input" rows="4"></textarea></label>
   </div>
 
   <div class="row" style="margin-top:12px;">
