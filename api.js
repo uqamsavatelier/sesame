@@ -1073,6 +1073,54 @@ export async function lookupHectorInventory(inventory) {
   return { assetTag, item, part };
 }
 
+const EQUIPMENT_PHOTOS_BUCKET = "equipment-photos";
+
+export async function uploadEquipmentPhotos(keyId, files) {
+  const id = Number(keyId);
+  if (!Number.isFinite(id) || !files?.length) return [];
+  const uploaded = [];
+  for (const file of files) {
+    if (!/^image\/(jpeg|png|webp)$/i.test(file.type)) throw new Error("Format photo non pris en charge.");
+    if (file.size > 10 * 1024 * 1024) throw new Error("Une photo ne peut pas dépasser 10 Mo.");
+    const extension = file.type === "image/jpeg" ? "jpg" : file.type.split("/")[1];
+    const path = `equipment/${id}/${crypto.randomUUID()}.${extension}`;
+    const { error: uploadError } = await supa.storage.from(EQUIPMENT_PHOTOS_BUCKET).upload(path, file, {
+      contentType: file.type,
+      upsert: false,
+    });
+    if (uploadError) throw uploadError;
+    const { data, error } = await supa.from("equipment_photos").insert({
+      key_id: id,
+      storage_path: path,
+      original_name: file.name,
+      mime_type: file.type,
+    }).select("id,key_id,storage_path,original_name,mime_type,created_at").single();
+    if (error) {
+      await supa.storage.from(EQUIPMENT_PHOTOS_BUCKET).remove([path]);
+      throw error;
+    }
+    uploaded.push(data);
+  }
+  return uploaded;
+}
+
+export async function listEquipmentPhotosByKeyIds(keyIds) {
+  const ids = (keyIds ?? []).map(Number).filter(Number.isFinite);
+  if (!ids.length) return [];
+  const { data, error } = await supa.from("equipment_photos")
+    .select("id,key_id,storage_path,original_name,mime_type,created_at")
+    .in("key_id", ids)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  const rows = [];
+  for (const row of data ?? []) {
+    const { data: signed, error: signError } = await supa.storage
+      .from(EQUIPMENT_PHOTOS_BUCKET).createSignedUrl(row.storage_path, 3600);
+    if (!signError) rows.push({ ...row, signed_url: signed?.signedUrl ?? null });
+  }
+  return rows;
+}
+
 
 
 

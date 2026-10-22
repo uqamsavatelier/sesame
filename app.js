@@ -36,6 +36,8 @@ import {
   rpcAdminCreateLoan,
   rpcAdminCreateKeyringLoan,
   lookupHectorInventory,
+  uploadEquipmentPhotos,
+  listEquipmentPhotosByKeyIds,
 } from "./api.js?v=20261021h";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks, logAuditEvent } from "./audit.js";
 
@@ -526,7 +528,7 @@ function buildNavLinks(role) {
   // Tu peux changer les routes plus tard. Pour l'instant: placeholders propres.
   if (isAdminRole(normalizedRole)) {
     const links = [
-      { label: isEquipmentCabinet() ? "Appareils" : "Clés", href: "./index.html" },
+      { label: "Armoires", href: "./index.html" },
       { label: "Emprunts", href: "./loans.html" },
       { label: "Suggestions", href: "./suggestions.html", badge: Number(state.suggestionCount) || 0 },
       { label: "Comment utiliser Sésame", action: "tutorial" },
@@ -547,14 +549,14 @@ function buildNavLinks(role) {
   }
   if (normalizedRole === "consultant") {
     return [
-      { label: isEquipmentCabinet() ? "Liste des appareils" : "Liste des clés", href: "./index.html" },
+      { label: "Armoires", href: "./index.html" },
       { label: "Comment utiliser Sésame", action: "tutorial" },
       { label: "Déconnexion", action: "logout", danger: true },
     ];
   }
   // user
   return [
-    { label: isEquipmentCabinet() ? "Liste des appareils" : "Liste des clés", href: "./index.html?mode=browse" },
+    { label: "Armoires", href: "./index.html?mode=browse" },
     { label: `Mes emprunts (${Number(state.myOpenLoanCount) || 0})`, href: "./my-loans.html" },
     { label: "Comment utiliser Sésame", action: "tutorial" },
     { label: "Déconnexion", action: "logout", danger: true },
@@ -969,6 +971,7 @@ let state = {
   managedCabinetRows: [],
   pavilions: [],
   keys: [],
+  equipmentPhotosByKey: new Map(),
   keyrings: [],
   loansByKey: new Map(),
   borrowersById: new Map(),
@@ -2358,6 +2361,15 @@ async function loadDataForCabinet() {
   state.pavilions = await listPavilions();
   renderPavilionSelects();
   state.keys = await listKeysByCabinet(cid);
+  let equipmentPhotos = [];
+  try { equipmentPhotos = await listEquipmentPhotosByKeyIds(state.keys.map((item) => item.id)); } catch (error) {
+    console.warn("Photos d'appareils indisponibles avant migration Storage.", error?.message ?? error);
+  }
+  state.equipmentPhotosByKey = new Map();
+  for (const photo of equipmentPhotos) {
+    if (!state.equipmentPhotosByKey.has(photo.key_id)) state.equipmentPhotosByKey.set(photo.key_id, []);
+    state.equipmentPhotosByKey.get(photo.key_id).push(photo);
+  }
   state.keyrings = await listKeyringsByCabinet(cid);
 
   await loadLoansForKeys();
@@ -3202,7 +3214,7 @@ function fillEquipmentFromHector(result) {
   set("m_brand", firstHectorValue(part.maker, part.brand, item.maker, item.brand));
   set("m_model", firstHectorValue(part.model, item.model));
   set("m_purchase_date", hectorDateValue(firstHectorValue(item.purchaseDate, item.acquiredDate, item.dateAcquisition)));
-  set("m_warranty_end_date", hectorDateValue(firstHectorValue(item.warrantyEnd, item.warrantyEndDate)));
+  set("m_warranty_end_date", hectorDateValue(firstHectorValue(item.warrantyDate, item.warrantyEnd, item.warrantyEndDate, item.warranty_end)));
   set("m_description", firstHectorValue(part.description, item.description, item.title, item.name));
 }
 
@@ -3584,12 +3596,17 @@ function render() {
     const lines = items.map((item) => ({
       key_id: item.id,
       text: item.inventory_number || `Appareil ${item.id}`,
+      html: item.inventory_number ? escapeHtml(item.inventory_number) : `Appareil ${item.id}`,
       details: [
         [item.brand, item.model].filter(Boolean).join(" "),
         item.description,
         item.accessories ? `Accessoires: ${item.accessories}` : "",
         item.purchase_date || item.warranty_end_date ? `Achat: ${item.purchase_date || "—"} • Garantie: ${item.warranty_end_date || "—"}` : "",
         parseKeyTags(item.tags).length ? `Tags: ${parseKeyTags(item.tags).join(", ")}` : "",
+        (() => {
+          const photos = state.equipmentPhotosByKey.get(item.id) ?? [];
+          return photos.length ? `<div class="equipment-photo-strip">${photos.map((photo) => photo.signed_url ? `<img src="${escapeHtml(photo.signed_url)}" alt="Photo de ${escapeHtml(item.inventory_number || "l'appareil")}" loading="lazy">` : "").join("")}</div>` : "";
+        })(),
       ].filter(Boolean),
       state: state.loansByKey?.has(item.id) ? "onloan" : "ok",
     }));
@@ -4346,7 +4363,7 @@ $("m_is_keyring").addEventListener("change", (e) => {
       const inventory_number = $("m_inventory_number").value.trim();
       if (!inventory_number) throw new Error("Le numéro d'inventaire / SAV est requis.");
       const tags = $("m_tags").value.split(",").map((tag) => tag.trim()).filter(Boolean);
-      const { error } = await supa.from("keys").insert({
+      const { data: createdEquipment, error } = await supa.from("keys").insert({
         key_code: crypto.randomUUID(),
         cabinet_id: Number(state.cabinetId),
         hook_no: null,
@@ -4360,12 +4377,17 @@ $("m_is_keyring").addEventListener("change", (e) => {
         accessories: $("m_accessories").value.trim() || null,
         remarque: $("m_equipment_remarque").value.trim() || null,
         tags,
-      });
+      }).select("id").single();
       if (error) throw error;
+      const photoFiles = [...($("m_equipment_photos")?.files ?? [])];
+      if (photoFiles.length) {
+        setManualStatus("Appareil ajouté — téléversement des photos…");
+        await uploadEquipmentPhotos(createdEquipment.id, photoFiles);
+      }
       setManualStatus("Appareil ajouté", 5000);
       await loadDataForCabinet();
       render();
-      ["m_inventory_number", "m_brand", "m_model", "m_purchase_date", "m_warranty_end_date", "m_description", "m_equipment_remarque", "m_accessories", "m_tags", "m_remarque"].forEach((id) => { if ($(id)) $(id).value = ""; });
+      ["m_inventory_number", "m_brand", "m_model", "m_purchase_date", "m_warranty_end_date", "m_description", "m_equipment_remarque", "m_accessories", "m_tags", "m_remarque", "m_equipment_photos"].forEach((id) => { if ($(id)) $(id).value = ""; });
       return;
     }
 

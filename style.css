@@ -2280,3 +2280,17 @@ body[data-theme="light"] .seg-label{
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+.equipment-photo-strip{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-top:8px;
+}
+.equipment-photo-strip img{
+  width:84px;
+  height:64px;
+  object-fit:cover;
+  border-radius:8px;
+  border:1px solid var(--border);
+}
