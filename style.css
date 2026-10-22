@@ -1484,6 +1484,7 @@ body[data-theme="light"] .keyring-card{
   gap:10px;
   margin-top: 12px;
 }
+.edit-grid[hidden]{display:none !important;}
 @media (max-width: 680px){
   .edit-grid{ grid-template-columns: 1fr; }
 }

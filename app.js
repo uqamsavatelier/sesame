@@ -3252,6 +3252,10 @@ function renderEditModal(keyId) {
   $("editModalSubtitle").textContent = equipment ? "Modifier les informations de l'appareil" : "Modifier les informations de la clé";
   $("keyEditFields").hidden = equipment;
   $("equipmentEditFields").hidden = !equipment;
+  $("keyEditFields").style.display = equipment ? "none" : "";
+  $("equipmentEditFields").style.display = equipment ? "" : "none";
+  $("keyEditFields").style.display = equipment ? "none" : "";
+  $("equipmentEditFields").style.display = equipment ? "" : "none";
   if (equipment) {
     $("edit_equipment_inventory").value = key.inventory_number ?? key.key_no ?? "";
     $("edit_equipment_brand").value = key.brand ?? "";
