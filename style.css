@@ -2297,5 +2297,11 @@ body[data-theme="light"] .seg-label{
 .equipment-accessory-rows{display:grid;gap:6px;margin-bottom:8px}
 .equipment-accessory-row{display:flex;gap:8px;align-items:center}
 .equipment-accessory-row .input{flex:1}
+.equipment-tag-rows{display:grid;gap:6px;margin-bottom:8px}
+.equipment-tag-row{display:flex;gap:8px;align-items:center}
+.equipment-tag-row .input{flex:1}
 .equipment-accessories{margin-top:4px}
 .equipment-accessories ul{margin:4px 0 0 18px;padding:0}
+.equipment-detail-row{align-items:flex-start}
+.equipment-detail-tags{margin-top:6px}
+.tag-chip{display:inline-block;padding:2px 7px;border-radius:999px;background:var(--panel-2);border:1px solid var(--border);font-size:12px}

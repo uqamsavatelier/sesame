@@ -1407,7 +1407,7 @@ function openTagDialog(kind, id, draftTags = null, onChange = null) {
     <form class="tag-add-form"><label>Ajouter un tag<input class="input" name="tag" maxlength="80" required placeholder="Ex. Archambault" autocomplete="off" /></label><button class="btn" type="submit">Ajouter</button></form>
     <p class="tag-current"></p><p class="muted tag-status" role="status"></p>`;
   dialog.querySelector('.tag-target').textContent = entity
-    ? (kind === 'key' ? `Clé ${formatKeyTag(entity)}` : `Trousseau ${entity.ring_code ?? ''}${entity.name ? ' — ' + entity.name : ''}`)
+    ? (kind === 'key' ? (isEquipmentCabinet() ? `Appareil ${entity.inventory_number ?? entity.id}` : `Clé ${formatKeyTag(entity)}`) : `Trousseau ${entity.ring_code ?? ''}${entity.name ? ' — ' + entity.name : ''}`)
     : 'Les tags seront enregistrés avec les modifications.';
   const update = () => { dialog.querySelector('.tag-current').textContent = `Tags actuels : ${tags.join(', ') || 'Aucun tag'}`; };
   update();
@@ -2820,7 +2820,56 @@ function updateSelectionUI() {
   if (btnRemove) btnRemove.style.display = state.hookModal.selectMode && selectedWith.length ? "" : "none";
 }
 
+function renderEquipmentDetailModal() {
+  const canReturn = canCabinetAction("retour");
+  const canDelete = canCabinetAction("suppression");
+  const canAdminLend = canAdminLendCurrentCabinet();
+  const canSelfBorrow = canSelfBorrowCabinet();
+  $("hookModalTitle").textContent = "Fiche des appareils";
+  $("hookModalActions").style.display = "none";
+  const container = $("hookModalContent");
+  container.innerHTML = `<div class="hook-section"><div class="hook-section-title">Appareils / équipements</div><div class="hook-list" id="equipmentDetailList"></div></div>`;
+  const list = $("equipmentDetailList");
+
+  for (const item of state.keys) {
+    const loan = state.loansByKey?.get(item.id);
+    const photos = state.equipmentPhotosByKey.get(item.id) ?? [];
+    const accessories = renderEquipmentAccessories(item.accessories);
+    const tags = parseKeyTags(item.tags);
+    const title = [item.brand, item.model, item.inventory_number || `Appareil ${item.id}`].filter(Boolean).join(" * ");
+    const loanAction = loan ? "key-return" : (canAdminLend ? "key-admin-loan" : "key-borrow");
+    const loanLabel = loan ? "Retourner" : (canAdminLend ? "Prêter" : "Emprunter");
+    const canLoan = loan ? canReturn : (canSelfBorrow || canAdminLend);
+    const photoHtml = photos.length ? `<div class="equipment-photo-strip">${photos.map((photo) => photo.signed_url ? `<img src="${escapeHtml(photo.signed_url)}" alt="Photo de ${escapeHtml(item.inventory_number || "l'appareil")}" loading="lazy">` : "").join("")}</div>` : "";
+    const tagHtml = tags.length ? `<div class="equipment-detail-tags"><strong>Tags :</strong> ${tags.map((tag) => `<span class="tag-chip">${escapeHtml(tag)}</span>`).join(" ")}</div>` : `<div class="muted">Aucun tag</div>`;
+    const loanHtml = loan ? `<div class="muted">Emprunté par : ${escapeHtml(loanBorrowerLabel(loan))} le ${escapeHtml(formatDateFr(loan.loaned_at))}</div>` : "";
+    list.insertAdjacentHTML("beforeend", `
+      <div class="key-row equipment-detail-row" data-key-id="${item.id}">
+        <div class="key-main">
+          <strong>${escapeHtml(title)}</strong>
+          ${item.description ? `<div class="muted">${escapeHtml(item.description)}</div>` : ""}
+          ${item.remarque ? `<div class="muted">Remarque : ${escapeHtml(item.remarque)}</div>` : ""}
+          ${item.purchase_date || item.warranty_end_date ? `<div class="muted">Date d'achat : ${escapeHtml(item.purchase_date || "—")} • Fin de garantie : ${escapeHtml(item.warranty_end_date || "—")}</div>` : ""}
+          ${accessories}
+          ${tagHtml}
+          ${photoHtml}
+          ${loanHtml}
+        </div>
+        <div class="key-actions">
+          <button class="btn secondary icon-btn" data-action="key-tags" data-key-id="${item.id}" title="Tags de l'appareil" aria-label="Tags de l'appareil">${tagIcon()}</button>
+          ${canLoan ? `<button class="btn reactive ${loan ? "btn-return" : "btn-borrow"}" data-action="${loanAction}" data-key-id="${item.id}" ${loan ? `data-loan-id="${loan.id}"` : ""}>${loanLabel}</button>` : ""}
+          ${canDelete ? `<button class="btn danger icon-btn" data-action="key-delete" data-key-id="${item.id}" title="Supprimer">X</button>` : ""}
+        </div>
+      </div>
+    `);
+  }
+}
+
 function renderHookModal(hookNo) {
+  if (isEquipmentCabinet() && hookNo === "equipment") {
+    renderEquipmentDetailModal();
+    return;
+  }
   const { keyringsForHook, singles } = getHookDetail(hookNo);
   $("hookModalTitle").textContent = `Crochet #${hookNo}`;
 
@@ -3202,9 +3251,30 @@ function resetEquipmentAccessoryRows() {
   if (host) host.innerHTML = "";
 }
 
+function addEquipmentTagRow(value = "") {
+  const host = $("equipmentTagRows");
+  if (!host) return;
+  const row = document.createElement("div");
+  row.className = "equipment-tag-row";
+  row.innerHTML = `<input class="input equipment-tag" placeholder="Ex. réseau" value="${escapeHtml(value)}" /><button class="btn secondary equipment-tag-remove" type="button" aria-label="Retirer le tag">Retirer</button>`;
+  host.appendChild(row);
+}
+
+function getEquipmentTags() {
+  return [...document.querySelectorAll("#equipmentTagRows .equipment-tag")]
+    .map((input) => input.value.trim())
+    .filter(Boolean)
+    .filter((tag, index, tags) => tags.findIndex((candidate) => normalizeText(candidate) === normalizeText(tag)) === index);
+}
+
+function resetEquipmentTagRows() {
+  const host = $("equipmentTagRows");
+  if (host) host.innerHTML = "";
+}
+
 function renderEquipmentAccessories(value) {
   const accessories = String(value ?? "")
-    .split(/\r?\n|,/)
+    .split(/\r?\n/)
     .map((item) => item.trim())
     .filter(Boolean);
   if (!accessories.length) return "";
@@ -3623,17 +3693,9 @@ function render() {
     const lines = items.map((item) => ({
       key_id: item.id,
       text: item.inventory_number || `Appareil ${item.id}`,
-      html: item.inventory_number ? escapeHtml(item.inventory_number) : `Appareil ${item.id}`,
+      html: escapeHtml([item.brand, item.model, item.inventory_number || `Appareil ${item.id}`].filter(Boolean).join(" * ")),
       details: [
-        [item.brand, item.model].filter(Boolean).join(" "),
-        item.description,
-        renderEquipmentAccessories(item.accessories),
-        item.purchase_date || item.warranty_end_date ? `Achat: ${item.purchase_date || "—"} • Garantie: ${item.warranty_end_date || "—"}` : "",
-        parseKeyTags(item.tags).length ? `Tags: ${parseKeyTags(item.tags).join(", ")}` : "",
-        (() => {
-          const photos = state.equipmentPhotosByKey.get(item.id) ?? [];
-          return photos.length ? `<div class="equipment-photo-strip">${photos.map((photo) => photo.signed_url ? `<img src="${escapeHtml(photo.signed_url)}" alt="Photo de ${escapeHtml(item.inventory_number || "l'appareil")}" loading="lazy">` : "").join("")}</div>` : "";
-        })(),
+        item.description ? escapeHtml(item.description) : "",
       ].filter(Boolean),
       state: state.loansByKey?.has(item.id) ? "onloan" : "ok",
     }));
@@ -3824,6 +3886,7 @@ function resetManualForm() {
   $("keyringBox").style.display = "none";
   $("keyringRows").innerHTML = "";
   resetEquipmentAccessoryRows();
+  resetEquipmentTagRows();
 }
 function resetManualEntryFieldsKeepHook() {
   $("m_keyno").value = "";
@@ -3836,6 +3899,7 @@ function resetManualEntryFieldsKeepHook() {
   $("keyringBox").style.display = "none";
   $("keyringRows").innerHTML = "";
   resetEquipmentAccessoryRows();
+  resetEquipmentTagRows();
 }
 let manualStatusTimer = null;
 function setManualStatus(msg, clearAfterMs = 0) {
@@ -4363,6 +4427,11 @@ $("m_is_keyring").addEventListener("change", (e) => {
     if (!event.target.closest(".equipment-accessory-remove")) return;
     event.target.closest(".equipment-accessory-row")?.remove();
   });
+  $("btnAddEquipmentTag")?.addEventListener("click", () => addEquipmentTagRow());
+  $("equipmentTagRows")?.addEventListener("click", (event) => {
+    if (!event.target.closest(".equipment-tag-remove")) return;
+    event.target.closest(".equipment-tag-row")?.remove();
+  });
   $("btnHectorAutofill")?.addEventListener("click", async () => {
     const status = $("hectorAutofillStatus");
     const inventory = $("m_inventory_number")?.value.trim();
@@ -4396,7 +4465,7 @@ $("m_is_keyring").addEventListener("change", (e) => {
     if (isEquipmentCabinet()) {
       const inventory_number = $("m_inventory_number").value.trim();
       if (!inventory_number) throw new Error("Le numéro d'inventaire / SAV est requis.");
-      const tags = $("m_tags").value.split(",").map((tag) => tag.trim()).filter(Boolean);
+      const tags = getEquipmentTags();
       const { data: createdEquipment, error } = await supa.from("keys").insert({
         key_code: crypto.randomUUID(),
         cabinet_id: Number(state.cabinetId),
@@ -4423,6 +4492,7 @@ $("m_is_keyring").addEventListener("change", (e) => {
       render();
       ["m_inventory_number", "m_brand", "m_model", "m_purchase_date", "m_warranty_end_date", "m_description", "m_equipment_remarque", "m_tags", "m_remarque", "m_equipment_photos"].forEach((id) => { if ($(id)) $(id).value = ""; });
       resetEquipmentAccessoryRows();
+      resetEquipmentTagRows();
       return;
     }
 
