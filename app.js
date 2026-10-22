@@ -3320,6 +3320,8 @@ function syncAddItemsForm() {
   $("equipmentFields").hidden = !equipment;
   $("legacyKeyFields").hidden = equipment;
   $("tabCsv").hidden = equipment;
+  if ($("hookContext")) $("hookContext").style.display = equipment ? "none" : "";
+  if ($("hookExistingDetails")) $("hookExistingDetails").style.display = equipment ? "none" : "";
   if (equipment) setTab("manual");
   if (equipment && !document.querySelector("#equipmentAccessoryRows .equipment-accessory")) addEquipmentAccessoryRow();
 }
@@ -4028,6 +4030,15 @@ function openManualAddForHook(hookNo) {
 
 $("btnAddKeys").addEventListener("click", () => {
   resetManualForm();
+  if (isEquipmentCabinet()) {
+    $("m_hook").value = "";
+    if ($("hookContext")) { $("hookContext").style.display = "none"; $("hookContext").innerHTML = ""; }
+    if ($("hookExistingDetails")) { $("hookExistingDetails").style.display = "none"; $("hookExistingDetails").innerHTML = ""; }
+    setTab("manual");
+    openModal();
+    $("m_inventory_number")?.focus();
+    return;
+  }
   // proposer crochet vide par défaut
   $("m_hook").value = String(suggestNextEmptyHook());
   $("m_qty").value = "1";

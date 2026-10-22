@@ -51,6 +51,19 @@ export function renderHookCard({ hookNo, keyLines, keyrings, role }) {
     `
     : "";
 
+  if (hookNo === "equipment") {
+    return `
+      <div class="equipment-list-stack">
+        <div class="equipment-list-heading">Appareils / équipements</div>
+        ${keyLines.map((line) => `
+          <div class="item equipment-list-item" data-hook-no="equipment">
+            <div class="kgrid equipment-list-grid">${renderKeyLine(line)}</div>
+          </div>
+        `).join("")}
+      </div>
+    `;
+  }
+
   return `
     <div class="item clickable" data-hook-no="${hookNo}">
       <div class="item-header">

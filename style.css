@@ -2330,6 +2330,10 @@ body[data-theme="light"] .seg-label{
 .equipment-detail-media .equipment-photo-strip{margin-top:0;justify-content:center;align-items:center}
 .equipment-detail-media .equipment-photo-strip img{width:320px;height:230px;object-fit:contain;background:var(--panel-2)}
 .equipment-list-cell{position:relative;isolation:isolate;overflow:hidden;flex:1 1 100%;width:100%;min-height:82px;padding:6px 0}
+.equipment-list-stack{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+.equipment-list-heading{font-weight:800;margin-bottom:2px}
+.equipment-list-item{display:block;padding:10px 12px}
+.equipment-list-item .equipment-list-grid{margin-top:0;width:100%}
 .equipment-list-cell > *:not(.equipment-list-photo){position:relative;z-index:1}
 .equipment-list-cell .kpill,.equipment-list-cell .kdetail{max-width:64%;box-sizing:border-box}
 .equipment-list-photo{position:absolute;z-index:0;right:-2px;top:0;width:min(52%,420px);height:100%;object-fit:contain;object-position:right center;opacity:.76;mask-image:linear-gradient(to right,transparent 0%,black 48%,black 100%);-webkit-mask-image:linear-gradient(to right,transparent 0%,black 48%,black 100%);pointer-events:none}
