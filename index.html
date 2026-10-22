@@ -511,8 +511,8 @@
 <section id="editModal" class="edit-modal" hidden aria-hidden="true">
   <div class="hook-modal-head">
     <div>
-      <div class="title">éditer clé</div>
-      <div class="muted">Modifier les informations de la clé</div>
+      <div id="editModalTitle" class="title">éditer clé</div>
+      <div id="editModalSubtitle" class="muted">Modifier les informations de la clé</div>
     </div>
     <button id="editClose" class="btn secondary reactive">Fermer</button>
   </div>
@@ -560,7 +560,8 @@
     <label class="field"><div class="muted">Fin de garantie</div><input id="edit_equipment_warranty" class="input" type="date" /></label>
     <label class="field"><div class="muted">Description</div><input id="edit_equipment_description" class="input" /></label>
     <label class="field"><div class="muted">Remarque</div><input id="edit_equipment_remarque" class="input" /></label>
-    <label class="field"><div class="muted">Accessoires inclus (un par ligne)</div><textarea id="edit_equipment_accessories" class="input" rows="4"></textarea></label>
+    <label class="field"><div class="muted">Accessoires <button id="btnAddEditEquipmentAccessory" class="btn secondary" type="button">Ajouter</button></div><div id="editEquipmentAccessoryRows" class="equipment-accessory-rows"></div></label>
+    <label class="field"><div class="muted">Photos de l'appareil</div><input id="edit_equipment_photos" class="input" type="file" accept="image/jpeg,image/png,image/webp" multiple /><div id="editEquipmentPhotoList" class="equipment-edit-photo-list"></div></label>
   </div>
 
   <div class="row" style="margin-top:12px;">

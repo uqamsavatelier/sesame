@@ -38,6 +38,7 @@ import {
   lookupHectorInventory,
   uploadEquipmentPhotos,
   listEquipmentPhotosByKeyIds,
+  deleteEquipmentPhoto,
 } from "./api.js?v=20261021h";
 import { ensureAuditSyncStarted, installGlobalAuditErrorHooks, logAuditEvent } from "./audit.js";
 
@@ -2828,6 +2829,7 @@ function renderEquipmentDetailModal() {
   const canAdminLend = canAdminLendCabinet();
   const canSelfBorrow = canSelfBorrowCabinet();
   $("hookModalTitle").textContent = "Fiche des appareils";
+  $("hookModalSub").textContent = "Détail des appareils";
   $("hookModalActions").style.display = "none";
   const container = $("hookModalContent");
   container.innerHTML = `<div class="hook-section"><div class="hook-section-title">Appareils / équipements</div><div class="hook-list" id="equipmentDetailList"></div></div>`;
@@ -2876,6 +2878,7 @@ function renderHookModal(hookNo) {
   }
   const { keyringsForHook, singles } = getHookDetail(hookNo);
   $("hookModalTitle").textContent = `Crochet #${hookNo}`;
+  $("hookModalSub").textContent = "Détail des clés et trousseaux";
 
   const canBorrow = canCabinetAction("emprunt");
   const canReturn = canCabinetAction("retour");
@@ -3188,11 +3191,43 @@ function getCurrentKeyringIdForKey(keyId) {
   return key.keyring_id ?? null;
 }
 
+function renderEditEquipmentAccessories(value) {
+  const host = $("editEquipmentAccessoryRows");
+  if (!host) return;
+  host.innerHTML = "";
+  String(value ?? "").split(/\r?\n/).map((item) => item.trim()).filter(Boolean).forEach((item) => addEditEquipmentAccessoryRow(item));
+}
+
+function addEditEquipmentAccessoryRow(value = "") {
+  const host = $("editEquipmentAccessoryRows");
+  if (!host) return;
+  const row = document.createElement("div");
+  row.className = "equipment-accessory-row";
+  row.innerHTML = `<input class="input edit-equipment-accessory" value="${escapeHtml(value)}" placeholder="Ex. Câble BNC" /><button class="btn secondary edit-equipment-accessory-remove" type="button">Retirer</button>`;
+  host.appendChild(row);
+}
+
+function getEditEquipmentAccessories() {
+  return [...document.querySelectorAll("#editEquipmentAccessoryRows .edit-equipment-accessory")]
+    .map((input) => input.value.trim()).filter(Boolean).join("\n");
+}
+
+function renderEditEquipmentPhotos(keyId) {
+  const host = $("editEquipmentPhotoList");
+  if (!host) return;
+  const photos = state.equipmentPhotosByKey.get(Number(keyId)) ?? [];
+  host.innerHTML = photos.length
+    ? photos.map((photo) => `<div class="equipment-edit-photo" data-photo-id="${photo.id}"><img src="${escapeHtml(photo.signed_url ?? "")}" alt="Photo de l'appareil" /><button class="btn danger equipment-photo-remove" type="button" data-photo-id="${photo.id}">Supprimer</button></div>`).join("")
+    : `<div class="muted">Aucune photo enregistrée.</div>`;
+}
+
 function renderEditModal(keyId) {
   const key = state.keys.find(k => k.id === keyId);
   if (!key) return;
 
   const equipment = isEquipmentCabinet();
+  $("editModalTitle").textContent = equipment ? "éditer appareil" : "éditer clé";
+  $("editModalSubtitle").textContent = equipment ? "Modifier les informations de l'appareil" : "Modifier les informations de la clé";
   $("keyEditFields").hidden = equipment;
   $("equipmentEditFields").hidden = !equipment;
   if (equipment) {
@@ -3203,7 +3238,9 @@ function renderEditModal(keyId) {
     $("edit_equipment_warranty").value = key.warranty_end_date ?? "";
     $("edit_equipment_description").value = key.description ?? "";
     $("edit_equipment_remarque").value = key.remarque ?? "";
-    $("edit_equipment_accessories").value = key.accessories ?? "";
+    renderEditEquipmentAccessories(key.accessories);
+    renderEditEquipmentPhotos(keyId);
+    $("edit_equipment_photos").value = "";
     renderTagEditor("edit_tags", key);
     $("editStatus").textContent = "";
     return;
@@ -4839,6 +4876,26 @@ $("m_is_keyring").addEventListener("change", (e) => {
   $("editClose").addEventListener("click", closeEditModal);
   $("editCancel").addEventListener("click", closeEditModal);
   $("editOverlay").addEventListener("click", closeEditModal);
+  $("btnAddEditEquipmentAccessory")?.addEventListener("click", () => addEditEquipmentAccessoryRow());
+  $("editEquipmentAccessoryRows")?.addEventListener("click", (event) => {
+    if (event.target.closest(".edit-equipment-accessory-remove")) event.target.closest(".equipment-accessory-row")?.remove();
+  });
+  $("editEquipmentPhotoList")?.addEventListener("click", async (event) => {
+    const button = event.target.closest(".equipment-photo-remove");
+    if (!button) return;
+    const keyId = state.editModal.keyId;
+    const photo = (state.equipmentPhotosByKey.get(Number(keyId)) ?? []).find((item) => Number(item.id) === Number(button.dataset.photoId));
+    if (!photo) return;
+    try {
+      button.disabled = true;
+      await deleteEquipmentPhoto(photo);
+      await loadDataForCabinet();
+      renderEditEquipmentPhotos(keyId);
+    } catch (error) {
+      alert(`Erreur lors de la suppression de la photo : ${error?.message ?? error}`);
+      button.disabled = false;
+    }
+  });
 
   $("editSave").addEventListener("click", async () => {
     if (!state.editModal.keyId) return;
@@ -4856,10 +4913,12 @@ $("m_is_keyring").addEventListener("change", (e) => {
           warranty_end_date: $("edit_equipment_warranty").value || null,
           description: $("edit_equipment_description").value.trim() || null,
           remarque: $("edit_equipment_remarque").value.trim() || null,
-          accessories: $("edit_equipment_accessories").value.trim() || null,
+          accessories: getEditEquipmentAccessories() || null,
           tags,
         }).eq("id", keyId);
         if (error) throw error;
+        const photoFiles = [...($("edit_equipment_photos")?.files ?? [])];
+        if (photoFiles.length) await uploadEquipmentPhotos(keyId, photoFiles);
         closeEditModal();
         await refreshAfterAction();
         return;

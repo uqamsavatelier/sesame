@@ -1121,6 +1121,14 @@ export async function listEquipmentPhotosByKeyIds(keyIds) {
   return rows;
 }
 
+export async function deleteEquipmentPhoto(photo) {
+  if (!photo?.id || !photo?.storage_path) throw new Error("Photo introuvable.");
+  const { error: storageError } = await supa.storage.from(EQUIPMENT_PHOTOS_BUCKET).remove([photo.storage_path]);
+  if (storageError) throw storageError;
+  const { error } = await supa.from("equipment_photos").delete().eq("id", photo.id);
+  if (error) throw error;
+}
+
 
 
 
