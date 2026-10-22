@@ -2329,9 +2329,10 @@ body[data-theme="light"] .seg-label{
 .equipment-detail-accessories li{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .equipment-detail-media .equipment-photo-strip{margin-top:0;justify-content:center;align-items:center}
 .equipment-detail-media .equipment-photo-strip img{width:320px;height:230px;object-fit:contain;background:var(--panel-2)}
-.equipment-list-cell{position:relative;isolation:isolate;overflow:hidden;min-height:54px}
+.equipment-list-cell{position:relative;isolation:isolate;overflow:hidden;flex:1 1 100%;width:100%;min-height:82px;padding:6px 0}
 .equipment-list-cell > *:not(.equipment-list-photo){position:relative;z-index:1}
-.equipment-list-photo{position:absolute;z-index:0;right:-2px;top:0;width:min(48%,300px);height:100%;object-fit:contain;object-position:right center;opacity:.7;mask-image:linear-gradient(to right,transparent 0%,black 48%,black 100%);-webkit-mask-image:linear-gradient(to right,transparent 0%,black 48%,black 100%);pointer-events:none}
+.equipment-list-cell .kpill,.equipment-list-cell .kdetail{max-width:64%;box-sizing:border-box}
+.equipment-list-photo{position:absolute;z-index:0;right:-2px;top:0;width:min(52%,420px);height:100%;object-fit:contain;object-position:right center;opacity:.76;mask-image:linear-gradient(to right,transparent 0%,black 48%,black 100%);-webkit-mask-image:linear-gradient(to right,transparent 0%,black 48%,black 100%);pointer-events:none}
 @media (max-width:720px){
   .equipment-detail-head{align-items:flex-start;flex-direction:column;gap:8px}
   .equipment-detail-row .equipment-detail-actions{flex-wrap:wrap;justify-content:flex-start}
