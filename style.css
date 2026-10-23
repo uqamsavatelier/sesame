@@ -2332,6 +2332,7 @@ body[data-theme="light"] .seg-label{
 .equipment-list-cell{position:relative;isolation:isolate;overflow:hidden;flex:1 1 100%;width:100%;min-height:82px;padding:6px 0}
 .equipment-list-label{position:relative;z-index:1;color:var(--text);font-size:13px;font-weight:600;margin-bottom:5px;max-width:64%;}
 .equipment-list-label span{font-weight:400;color:var(--muted)}
+.equipment-list-status{position:relative;z-index:1;margin-top:7px;color:var(--muted);font-size:13px;max-width:64%;line-height:1.35}
 .equipment-list-stack{display:flex;flex-direction:column;gap:10px;margin-top:10px}
 .equipment-list-heading{font-weight:800;margin-bottom:2px}
 .equipment-list-item{display:block;padding:10px 12px}

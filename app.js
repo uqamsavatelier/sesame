@@ -994,6 +994,7 @@ let state = {
   hookModal: {
     open: false,
     hookNo: null,
+    deviceId: null,
     selectedKeyIds: new Set(),
     selectMode: false,
     pendingCreateKeyring: null,
@@ -2701,6 +2702,14 @@ function formatDateFr(d) {
   }
 }
 
+function formatDateTimeFr(d) {
+  if (!d) return "—";
+  const date = new Date(d);
+  return Number.isNaN(date.getTime())
+    ? String(d)
+    : date.toLocaleString("fr-CA", { dateStyle: "short", timeStyle: "short" });
+}
+
 function compareKeyNo(a, b) {
   const sa = String(a?.key_no ?? "").toUpperCase();
   const sb = String(b?.key_no ?? "").toUpperCase();
@@ -2832,7 +2841,7 @@ function updateSelectionUI() {
   if (btnRemove) btnRemove.style.display = state.hookModal.selectMode && selectedWith.length ? "" : "none";
 }
 
-function renderEquipmentDetailModal(deviceId = null) {
+function renderEquipmentDetailModal(deviceId = state.hookModal.deviceId) {
   const canReturn = canCabinetAction("retour");
   const canDelete = canCabinetAction("suppression");
   const canSignal = canRole("signalement");
@@ -2861,12 +2870,14 @@ function renderEquipmentDetailModal(deviceId = null) {
     const photoHtml = photos.length ? `<div class="equipment-photo-strip">${photos.map((photo) => photo.signed_url ? `<img src="${escapeHtml(photo.signed_url)}" alt="Photo de ${escapeHtml(item.inventory_number || "l'appareil")}" loading="lazy">` : "").join("")}</div>` : "";
     const tagHtml = tags.length ? `<div class="equipment-detail-tags"><strong>Tags :</strong> ${tags.map((tag) => `<span class="tag-chip">${escapeHtml(tag)}</span>`).join(" ")}</div>` : `<div class="muted">Aucun tag</div>`;
     const loanHtml = loan ? `<div class="muted">Emprunté par : ${escapeHtml(loanBorrowerLabel(loan))} le ${escapeHtml(formatDateFr(loan.loaned_at))}</div>` : "";
+    const missingInfo = state.missingByKey?.get(item.id);
+    const missingHtml = item.is_missing ? `<div class="muted">Signalé disparu par : ${escapeHtml(missingInfo?.reported_by_name || "—")} le ${escapeHtml(formatDateTimeFr(missingInfo?.reported_at))}</div>` : "";
     list.insertAdjacentHTML("beforeend", `
       <div class="key-row equipment-detail-row" data-key-id="${item.id}">
         <div class="key-main">
           <div class="equipment-detail-head"><strong>${escapeHtml(title)}</strong><div class="equipment-detail-actions">
             <button class="btn secondary icon-btn" data-action="key-tags" data-key-id="${item.id}" title="Tags de l'appareil" aria-label="Tags de l'appareil">${tagIcon()}</button>
-            ${canLoan ? `<button class="btn reactive ${loan ? "btn-return" : "btn-borrow"}" data-action="${loanAction}" data-key-id="${item.id}" ${loan ? `data-loan-id="${loan.id}"` : ""}>${loanLabel}</button>` : ""}
+            ${canLoan && (loan || !item.is_missing) ? `<button class="btn reactive ${loan ? "btn-return" : "btn-borrow"}" data-action="${loanAction}" data-key-id="${item.id}" ${loan ? `data-loan-id="${loan.id}"` : ""}>${loanLabel}</button>` : ""}
             ${canSignal ? `<button class="btn secondary reactive" data-action="${item.is_missing ? "key-found" : "key-missing"}" data-key-id="${item.id}">${item.is_missing ? "Signalée retrouvée" : "Signaler disparue"}</button>` : ""}
             ${canEdit ? `<button class="btn secondary icon-btn reactive" data-action="key-edit" data-key-id="${item.id}" title="Éditer">✎</button>` : ""}
             ${canDelete ? `<button class="btn danger icon-btn" data-action="key-delete" data-key-id="${item.id}" title="Supprimer">X</button>` : ""}
@@ -2877,6 +2888,7 @@ function renderEquipmentDetailModal(deviceId = null) {
           <div class="equipment-detail-media"><div class="equipment-detail-accessories">${accessories || `<div class="muted">Aucun accessoire</div>`}</div>${photoHtml}</div>
           ${tagHtml}
           ${loanHtml}
+          ${missingHtml}
         </div>
       </div>
     `);
@@ -2889,6 +2901,7 @@ function openEquipmentDetailModal(deviceId) {
   const wasOpen = state.hookModal.open;
   state.hookModal.open = true;
   state.hookModal.hookNo = "equipment";
+  state.hookModal.deviceId = id;
   renderEquipmentDetailModal(id);
   setHookModalOpen(true);
   openTrackedModal("hook", wasOpen);
@@ -2896,7 +2909,7 @@ function openEquipmentDetailModal(deviceId) {
 
 function renderHookModal(hookNo) {
   if (isEquipmentCabinet() && hookNo === "equipment") {
-    renderEquipmentDetailModal();
+    renderEquipmentDetailModal(state.hookModal.deviceId);
     return;
   }
   const { keyringsForHook, singles } = getHookDetail(hookNo);
@@ -3084,6 +3097,7 @@ function openHookModal(hookNo) {
   const wasOpen = state.hookModal.open;
   state.hookModal.open = true;
   state.hookModal.hookNo = hookNo;
+  state.hookModal.deviceId = null;
   renderHookModal(hookNo);
   setHookModalOpen(true);
   openTrackedModal("hook", wasOpen);
@@ -3093,6 +3107,7 @@ function closeHookModal(options = {}) {
   closeTrackedModal("hook", () => {
     state.hookModal.open = false;
     state.hookModal.hookNo = null;
+    state.hookModal.deviceId = null;
     state.hookModal.selectedKeyIds.clear();
     state.hookModal.selectMode = false;
     setHookSelectMode(false);
@@ -3800,21 +3815,29 @@ function render() {
       item.slot_code, item.inventory_number, item.brand, item.model, item.description,
       item.accessories, parseKeyTags(item.tags).join(" "), item.remarque,
     ].join(" ")).includes(q));
-    const lines = items.map((item) => ({
-      key_id: item.id,
-      text: item.slot_code || item.inventory_number || `Appareil ${item.id}`,
-      html: escapeHtml([[item.brand, item.model].filter(Boolean).join(" "), item.inventory_number].filter(Boolean).join(" · ") || `Appareil ${item.id}`),
-      details: [
-        item.description ? escapeHtml(item.description) : "",
-      ].filter(Boolean),
-      equipment: true,
-      slotCode: item.slot_code || "",
-      className: "equipment-list-cell",
-      media: (state.equipmentPhotosByKey.get(item.id) ?? []).find((photo) => photo.signed_url)?.signed_url
-        ? `<img class="equipment-list-photo" src="${escapeHtml((state.equipmentPhotosByKey.get(item.id) ?? []).find((photo) => photo.signed_url).signed_url)}" alt="" loading="lazy">`
-        : "",
-      state: state.loansByKey?.has(item.id) ? "onloan" : "ok",
-    }));
+    const lines = items.map((item) => {
+      const loan = state.loansByKey?.get(item.id);
+      const missingInfo = state.missingByKey?.get(item.id);
+      const status = item.is_missing
+        ? `Signalé disparu par : ${missingInfo?.reported_by_name || "—"} le ${formatDateTimeFr(missingInfo?.reported_at)}`
+        : loan ? `Emprunté par : ${loanBorrowerLabel(loan)} le ${formatDateTimeFr(loan.loaned_at)}` : "";
+      return {
+        key_id: item.id,
+        text: item.slot_code || item.inventory_number || `Appareil ${item.id}`,
+        html: escapeHtml([[item.brand, item.model].filter(Boolean).join(" "), item.inventory_number].filter(Boolean).join(" · ") || `Appareil ${item.id}`),
+        details: [
+          item.description ? escapeHtml(item.description) : "",
+        ].filter(Boolean),
+        status: status ? escapeHtml(status) : "",
+        equipment: true,
+        slotCode: item.slot_code || "",
+        className: "equipment-list-cell",
+        media: (state.equipmentPhotosByKey.get(item.id) ?? []).find((photo) => photo.signed_url)?.signed_url
+          ? `<img class="equipment-list-photo" src="${escapeHtml((state.equipmentPhotosByKey.get(item.id) ?? []).find((photo) => photo.signed_url).signed_url)}" alt="" loading="lazy">`
+          : "",
+        state: item.is_missing ? "missing" : (loan ? "onloan" : "ok"),
+      };
+    });
     renderPager(1, items.length);
     $("pageInfo").textContent = `${items.length} appareil${items.length > 1 ? "s" : ""}`;
     $("list").innerHTML = renderHookCard({ hookNo: "equipment", keyLines: lines, keyrings: [], role: state.role });
