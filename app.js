@@ -2,6 +2,7 @@
 
 import { requireSessionOrRedirect, getMyProfile, signOut, isPendingApprovalRole, redirectToRoleHome, notifyAdminAboutPendingUsers } from "./auth.js?v=20260416f";
 import { groupByHook, renderHookCard } from "./ui.js";
+import { exportCabinetWorkbook } from "./cabinetExport.js";
 import {
   listCabinets,
   listPavilions,
@@ -4191,6 +4192,21 @@ renderHookExistingDetails(Number($("m_hook").value));
   $("cabEditClose").addEventListener("click", closeCabinetEditModal);
   $("cabEditCancel").addEventListener("click", closeCabinetEditModal);
   $("cabinetEditOverlay").addEventListener("click", closeCabinetEditModal);
+  $("cabEditExport").addEventListener("click", async () => {
+    const cabinetId = Number(state.cabinetEditModal.cabinetId);
+    if (!state.cabinetEditModal.open || !canConfigureCabinet(cabinetId)) return;
+    const button = $("cabEditExport");
+    try {
+      button.disabled = true;
+      $("cabEditStatus").textContent = "Préparation du fichier Excel...";
+      const filename = await exportCabinetWorkbook(cabinetId);
+      $("cabEditStatus").textContent = `Fichier téléchargé : ${filename}`;
+    } catch (error) {
+      $("cabEditStatus").textContent = `Export impossible : ${error?.message ?? error}`;
+    } finally {
+      button.disabled = false;
+    }
+  });
   $("cabinetManagerSearch").addEventListener("input", (e) => {
     state.cabinetEditModal.managerSearch = e.target.value || "";
     renderCabinetManagersEditor();

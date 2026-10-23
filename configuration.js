@@ -285,7 +285,7 @@ function bindThemeToggle() {
 function buildNavLinks(role) {
   if (role === "super_admin") {
     return [
-      { label: "Clés", href: "./index.html" },
+      { label: "Armoires", href: "./index.html" },
       { label: "Emprunts", href: "./loans.html" },
       { label: "Suggestions", href: "./suggestions.html", badge: Number(state.suggestionCount) || 0 },
       { label: "Configuration", href: "./configuration.html" },
@@ -294,7 +294,7 @@ function buildNavLinks(role) {
   }
   if (isAdminRole(role)) {
     return [
-      { label: "Clés", href: "./index.html" },
+      { label: "Armoires", href: "./index.html" },
       { label: "Emprunts", href: "./loans.html" },
       { label: "Suggestions", href: "./suggestions.html", badge: Number(state.suggestionCount) || 0 },
       { label: "Journal d'audit", href: "./configuration.html" },
@@ -309,12 +309,12 @@ function buildNavLinks(role) {
   }
   if (role === "consultant") {
     return [
-      { label: "Liste des clés", href: "./index.html" },
+      { label: "Armoires", href: "./index.html" },
       { label: "Déconnexion", action: "logout", danger: true },
     ];
   }
   return [
-    { label: "Liste des clés", href: "./index.html?mode=browse" },
+    { label: "Armoires", href: "./index.html?mode=browse" },
     { label: `Mes emprunts (${Number(state.myOpenLoanCount) || 0})`, href: "./my-loans.html" },
     { label: "Déconnexion", action: "logout", danger: true },
   ];

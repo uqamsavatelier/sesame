@@ -70,7 +70,7 @@ function buildNavLinks(role) {
   const normalizedRole = normalizeRole(role);
   if (normalizedRole === "super_admin") {
     return [
-      { label: "Clés", href: "./index.html" },
+      { label: "Armoires", href: "./index.html" },
       { label: "Emprunts", href: "./loans.html" },
       { label: "Suggestions", href: "./suggestions.html", badge: Number(state.suggestionCount) || 0 },
       { label: "Configuration", href: "./configuration.html", badge: Number(state.pendingUserCount) || 0 },
@@ -79,7 +79,7 @@ function buildNavLinks(role) {
   }
   if (isAdminRole(normalizedRole)) {
     return [
-      { label: "Clés", href: "./index.html" },
+      { label: "Armoires", href: "./index.html" },
       { label: "Emprunts", href: "./loans.html" },
       { label: "Suggestions", href: "./suggestions.html", badge: Number(state.suggestionCount) || 0 },
       { label: "Utilisateurs et audit", href: "./configuration.html", badge: Number(state.pendingUserCount) || 0 },
@@ -94,12 +94,12 @@ function buildNavLinks(role) {
   }
   if (normalizedRole === "consultant") {
     return [
-      { label: "Liste des clés", href: "./index.html" },
+      { label: "Armoires", href: "./index.html" },
       { label: "Déconnexion", action: "logout", danger: true },
     ];
   }
   return [
-    { label: "Liste des clés", href: "./index.html?mode=browse" },
+    { label: "Armoires", href: "./index.html?mode=browse" },
     { label: `Mes emprunts (${Number(state.myOpenLoanCount) || 0})`, href: "./my-loans.html" },
     { label: "Déconnexion", action: "logout", danger: true },
   ];
