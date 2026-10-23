@@ -1498,6 +1498,25 @@ function buildSearchDetailsForKey(k, query) {
   return details.concat(buildTagSearchDetails(k, query));
 }
 
+function buildSearchDetailsForEquipment(item, query) {
+  const q = normalizeText(query);
+  if (!q) return [];
+  const details = [];
+  const fields = [
+    { label: "Accessoire", values: String(item.accessories ?? "").split(/\r?\n/) },
+    { label: "Remarque", values: [item.remarque] },
+  ];
+  for (const field of fields) {
+    for (const value of field.values) {
+      const text = String(value ?? "").trim();
+      if (text && normalizeText(text).includes(q)) {
+        details.push(`${field.label} : ${highlightText(text, query)}`);
+      }
+    }
+  }
+  return details.concat(buildTagSearchDetails(item, query));
+}
+
 function buildKeyTicketLines(k, query = "") {
   const formatPart = (value) => {
     const text = String(value ?? "").trim();
@@ -3824,13 +3843,14 @@ function render() {
       return {
         key_id: item.id,
         text: item.slot_code || item.inventory_number || `Appareil ${item.id}`,
-        html: escapeHtml([[item.brand, item.model].filter(Boolean).join(" "), item.inventory_number].filter(Boolean).join(" · ") || `Appareil ${item.id}`),
+        html: [[item.brand, item.model].filter(Boolean).join(" "), item.inventory_number].filter(Boolean).map((part) => highlightText(part, state.q)).join(" · ") || escapeHtml(`Appareil ${item.id}`),
         details: [
-          item.description ? escapeHtml(item.description) : "",
+          item.description ? highlightText(item.description, state.q) : "",
         ].filter(Boolean),
+        searchDetails: buildSearchDetailsForEquipment(item, state.q),
         status: status ? escapeHtml(status) : "",
         equipment: true,
-        slotCode: item.slot_code || "",
+        slotCode: item.slot_code ? highlightText(item.slot_code, state.q) : "",
         className: "equipment-list-cell",
         media: (state.equipmentPhotosByKey.get(item.id) ?? []).find((photo) => photo.signed_url)?.signed_url
           ? `<img class="equipment-list-photo" src="${escapeHtml((state.equipmentPhotosByKey.get(item.id) ?? []).find((photo) => photo.signed_url).signed_url)}" alt="" loading="lazy">`

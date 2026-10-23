@@ -18,10 +18,11 @@ export function renderHookCard({ hookNo, keyLines, keyrings, role }) {
     const pillText = k.html ? k.html : escapeHtml(k.text);
     const detail = k.details?.length ? `<div class="kdetail">${k.details.join(" • ")}</div>` : "";
     if (k.equipment) {
-      const slot = k.slotCode ? `<strong>${escapeHtml(k.slotCode)}</strong>` : "";
+      const slot = k.slotCode ? `<strong>${k.slotCode}</strong>` : "";
       const description = k.details?.length ? ` <span>· ${k.details[0]}</span>` : "";
       const status = k.status ? `<div class="equipment-list-status">${k.status}</div>` : "";
-      return `<div class="kcell equipment-list-cell ${k.className ?? ""}"><div class="equipment-list-label">${slot}${description}</div><span class="${badge(k.state)}">${pillText}</span>${status}${k.media ?? ""}</div>`;
+      const searchDetails = k.searchDetails?.length ? `<div class="kdetail">${k.searchDetails.join(" • ")}</div>` : "";
+      return `<div class="kcell equipment-list-cell ${k.className ?? ""}"><div class="equipment-list-label">${slot}${description}</div><span class="${badge(k.state)}">${pillText}</span>${searchDetails}${status}${k.media ?? ""}</div>`;
     }
     return `<div class="kcell ${k.className ?? ""}"><span class="${badge(k.state)}">${pillText}</span>${detail}${k.media ?? ""}</div>`;
   };
